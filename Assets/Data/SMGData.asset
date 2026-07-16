@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fb545db746e5df45807a9f6aa5c76e0, type: 3}
+  m_Name: SMGData
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  weaponName: SMG
+  damage: 25
+  range: 60
+  minDistance: 30
+  maxDistance: 60
+  minDamageMultiplier: 0.2
+  adsFOV: 40
+  magazineSize: 25
+  maxReserveAmmo: 250
+  reloadTime: 2
+  bloomAngle: 3.5
+  recoilForce: 1.2
+  adsBloomMultiplier: 0.1
+  adsRecoilMultiplier: 0.5
+  pelletCount: 1
+  spreadAngle: 5
+  isAutomatic: 1
+  fireRate: 0.07
+  hitEffectWall: {fileID: 2349144301317662097, guid: 6f1eacd9cb7a964439aee3b5e2a0792c, type: 3}
+  hitEffectEnemy: {fileID: 1101816711836481417, guid: 4a5681f27d660dc408f4e145a60d302e, type: 3}
+  muzzleFlashPrefab: {fileID: 3735165956315205474, guid: 43461c2da6dd59b4d8d201a0cc6f831c, type: 3}
+  shellPrefab: {fileID: 6298361367402843078, guid: bfe1fe152427b3f4db6af9f1ee3cf90e, type: 3}
+  tracerPrefab: {fileID: 7402264872716325727, guid: 6dbd1a4bc4969034c910d58f31055dad, type: 3}

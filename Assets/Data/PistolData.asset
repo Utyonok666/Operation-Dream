@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fb545db746e5df45807a9f6aa5c76e0, type: 3}
+  m_Name: PistolData
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  weaponName: Pistol
+  damage: 15
+  range: 50
+  minDistance: 10
+  maxDistance: 20
+  minDamageMultiplier: 0.2
+  adsFOV: 60
+  magazineSize: 9
+  maxReserveAmmo: 81
+  reloadTime: 1.5
+  bloomAngle: 1.5
+  recoilForce: 1.8
+  adsBloomMultiplier: 0.001
+  adsRecoilMultiplier: 0.8
+  pelletCount: 1
+  spreadAngle: 5
+  isAutomatic: 0
+  fireRate: 0.15
+  hitEffectWall: {fileID: 2349144301317662097, guid: 6f1eacd9cb7a964439aee3b5e2a0792c, type: 3}
+  hitEffectEnemy: {fileID: 1101816711836481417, guid: 4a5681f27d660dc408f4e145a60d302e, type: 3}
+  muzzleFlashPrefab: {fileID: 3735165956315205474, guid: 43461c2da6dd59b4d8d201a0cc6f831c, type: 3}
+  shellPrefab: {fileID: 5727361690036194703, guid: 389d7b7150f4a7747871012cfc007961, type: 3}
+  tracerPrefab: {fileID: 7402264872716325727, guid: 6dbd1a4bc4969034c910d58f31055dad, type: 3}
