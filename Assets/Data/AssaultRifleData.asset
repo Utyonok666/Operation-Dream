@@ -13,13 +13,14 @@ MonoBehaviour:
   m_Name: AssaultRifleData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   weaponName: Rifle
-  damage: 30
-  range: 125
+  damage: 18
+  range: 500
   minDistance: 40
   maxDistance: 70
   minDamageMultiplier: 0.2
   adsFOV: 50
   magazineSize: 30
+  maxReserveAmmo: 300
   reloadTime: 2
   bloomAngle: 2.5
   recoilForce: 2.4

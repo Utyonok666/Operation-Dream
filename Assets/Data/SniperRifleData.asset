@@ -13,11 +13,11 @@ MonoBehaviour:
   m_Name: SniperRifleData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   weaponName: SniperRifle
-  damage: 100
+  damage: 200
   range: 500
   minDistance: 50
   maxDistance: 200
-  minDamageMultiplier: 0.2
+  minDamageMultiplier: 0.9
   adsFOV: 10
   magazineSize: 5
   maxReserveAmmo: 30

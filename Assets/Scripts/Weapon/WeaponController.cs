@@ -1,8 +1,11 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Mirror;
 
 public class WeaponController : MonoBehaviour
 {
+    [SerializeField] private NetworkIdentity networkIdentity;
+
     [Header("References")]
     [SerializeField] private Camera playerCamera;
     [SerializeField] private WeaponData weaponSettings;
@@ -29,6 +32,25 @@ public class WeaponController : MonoBehaviour
     // Событие, которое будет использовать NetworkWeapon
     public event System.Action<RaycastHit, float> OnPlayerHit;
 
+    // Новое событие: то же самое, но + направление, в котором реально летела пуля
+    // (с учётом разброса). Нужно, чтобы при смерти тело падало в сторону выстрела.
+    // Подпишись на него там, где сейчас вызывается health.TakeDamage(damage) —
+    // и передай damage-direction вторым аргументом в новый оверлоад TakeDamage(damage, direction).
+    public event System.Action<RaycastHit, float, Vector3> OnPlayerHitDirectional;
+    
+    // Событие для дублёра визуальных эффектов (NetworkWeaponEffects)
+    public event System.Action OnWeaponFired;
+
+    private void Awake()
+    {
+        // Страховка: если ссылку забыли перетянуть в инспекторе на префабе
+        // (что и произошло - у всех 5 WeaponController networkIdentity был пуст),
+        // достаём её из родителя автоматически, чтобы проверка isLocalPlayer
+        // в Update() не отключалась молча.
+        if (networkIdentity == null)
+            networkIdentity = GetComponentInParent<NetworkIdentity>();
+    }
+
     private void Start()
     {
         if (weaponSettings != null)
@@ -40,9 +62,6 @@ public class WeaponController : MonoBehaviour
 
     private void OnDisable()
     {
-        // Оружие убрали (переключили класс/слот) пока шёл релоад.
-        // Unity сама остановит корутину, но isReloading останется true навсегда — сбрасываем вручную,
-        // иначе при повторном доставании оружие "залипнет" и не будет ни стрелять, ни перезаряжаться.
         if (isReloading)
         {
             StopAllCoroutines();
@@ -52,6 +71,15 @@ public class WeaponController : MonoBehaviour
 
     private void Update()
     {
+        // Fail-closed: если по какой-то причине networkIdentity так и не
+        // нашёлся - НЕ обрабатываем ввод, вместо того чтобы молча
+        // разрешить стрельбу всем подряд (как было раньше при пустой ссылке).
+        if (networkIdentity == null || !networkIdentity.isLocalPlayer)
+            return;
+
+        if (weaponSettings == null)
+            return;
+
         if (weaponSettings == null)
             return;
 
@@ -82,15 +110,11 @@ public class WeaponController : MonoBehaviour
             return;
 
         if (currentAmmo <= 0)
-        {
-            // Патронов в магазине нет — можно повесить сюда звук "клак" на сухой щелчок
             return;
-        }
 
         lastShotTime = Time.time;
         currentAmmo--;
 
-        // Отдача камеры
         if (recoilHandler != null)
         {
             float recoilMultiplier = isADS
@@ -103,14 +127,30 @@ public class WeaponController : MonoBehaviour
             );
         }
 
-        // --- СПАВН ВСПЫШКИ ---
+        // --- ЛОКАЛЬНЫЕ ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ---
+        PlayVisualEffectsOnly();
+
+        // --- СИГНАЛ В СЕТЬ ДЛЯ ДРУГИХ ИГРОКОВ ---
+        OnWeaponFired?.Invoke();
+
+        int pellets = Mathf.Max(1, weaponSettings.pelletCount);
+        float damagePerPellet = weaponSettings.damage / pellets;
+
+        for (int i = 0; i < pellets; i++)
+            FirePellet(damagePerPellet);
+    }
+
+    // Метод, который проигрывает только вспышку и гильзу
+    public void PlayVisualEffectsOnly()
+    {
+        if (weaponSettings == null) return;
+
         if (weaponSettings.muzzleFlashPrefab != null && muzzlePoint != null)
         {
             GameObject flash = Instantiate(weaponSettings.muzzleFlashPrefab, muzzlePoint.position, muzzlePoint.rotation, muzzlePoint);
             Destroy(flash, 0.1f);
         }
 
-        // --- ВЫБРОС ГИЛЬЗЫ ---
         if (weaponSettings.shellPrefab != null && shellEjectPoint != null)
         {
             GameObject shell = Instantiate(weaponSettings.shellPrefab, shellEjectPoint.position, shellEjectPoint.rotation);
@@ -123,13 +163,64 @@ public class WeaponController : MonoBehaviour
             }
             Destroy(shell, 3f);
         }
-
-        int pellets = Mathf.Max(1, weaponSettings.pelletCount);
-        float damagePerPellet = weaponSettings.damage / pellets;
-
-        for (int i = 0; i < pellets; i++)
-            FirePellet(damagePerPellet);
     }
+
+    // =========================================================================
+    // НОВЫЕ МЕТОДЫ: Имитация выстрела для других игроков (БЕЗ УРОНА)
+    // =========================================================================
+    public void PlayRemoteVisuals()
+    {
+        if (weaponSettings == null) return;
+
+        // 1. Вспышка и гильза
+        PlayVisualEffectsOnly();
+
+        // 2. Трассеры и эффекты попадания для каждого патрона/дробинки
+        int pellets = Mathf.Max(1, weaponSettings.pelletCount);
+        for (int i = 0; i < pellets; i++)
+        {
+            FireRemotePellet();
+        }
+    }
+
+    private void FireRemotePellet()
+    {
+        // У других клиентов нет информации, в прицеле мы или нет, поэтому используем базовый разброс
+        float spread = weaponSettings.pelletCount > 1
+            ? weaponSettings.spreadAngle
+            : weaponSettings.bloomAngle;
+
+        Vector3 direction = playerCamera.transform.forward;
+        direction = Quaternion.Euler(
+            Random.Range(-spread, spread),
+            Random.Range(-spread, spread),
+            0f) * direction;
+
+        // Визуальный Raycast
+        if (Physics.Raycast(playerCamera.transform.position, direction, out RaycastHit hit, weaponSettings.range))
+        {
+            IDamageable target = hit.collider.GetComponentInParent<IDamageable>();
+            
+            // Выбираем эффект (кровь или искры)
+            GameObject effect = target != null
+                ? weaponSettings.hitEffectEnemy
+                : weaponSettings.hitEffectWall;
+
+            if (effect != null)
+            {
+                Destroy(Instantiate(effect, hit.point, Quaternion.LookRotation(hit.normal)), 1f);
+            }
+
+            // Спавним трейсер
+            if (weaponSettings.tracerPrefab != null && muzzlePoint != null)
+            {
+                TrailRenderer tracer = Instantiate(weaponSettings.tracerPrefab, muzzlePoint.position, Quaternion.identity);
+                tracer.AddPosition(muzzlePoint.position);
+                StartCoroutine(SpawnTracer(tracer, hit.point));
+            }
+        }
+    }
+    // =========================================================================
 
     private void FirePellet(float damagePerPellet)
     {
@@ -149,24 +240,20 @@ public class WeaponController : MonoBehaviour
                 playerCamera.transform.position,
                 direction,
                 out RaycastHit hit,
-                weaponSettings.range,
-                ~LayerMask.GetMask("Player")))
+                weaponSettings.range))
         {
             float distance = Vector3.Distance(
                 playerCamera.transform.position,
                 hit.point);
 
-            IDamageable target = hit.collider.GetComponent<IDamageable>();
+            IDamageable target = hit.collider.GetComponentInParent<IDamageable>();
 
             float damage = CalculateDamage(distance, damagePerPellet);
 
             if (target != null)
             {
-                // Пока оставляем для одиночной игры.
-                target.TakeDamage(damage);
-
-                // Потом NetworkWeapon подпишется на это событие.
                 OnPlayerHit?.Invoke(hit, damage);
+                OnPlayerHitDirectional?.Invoke(hit, damage, direction);
             }
 
             GameObject effect = target != null
@@ -183,7 +270,6 @@ public class WeaponController : MonoBehaviour
                     1f);
             }
 
-            // --- СПАВН ТРЕЙСЕРА ---
             if (weaponSettings.tracerPrefab != null && muzzlePoint != null)
             {
                 TrailRenderer tracer = Instantiate(
@@ -204,58 +290,37 @@ public class WeaponController : MonoBehaviour
             (distance - weaponSettings.minDistance) /
             (weaponSettings.maxDistance - weaponSettings.minDistance));
 
-        return baseDamage *
-               Mathf.Lerp(
-                   1f,
-                   weaponSettings.minDamageMultiplier,
-                   t);
+        return baseDamage * Mathf.Lerp(1f, weaponSettings.minDamageMultiplier, t);
     }
 
     private System.Collections.IEnumerator Reload()
     {
         isReloading = true;
-
-        yield return new WaitForSeconds(
-            weaponSettings.reloadTime);
-
-        // Сколько патронов реально не хватает в магазине
+        yield return new WaitForSeconds(weaponSettings.reloadTime);
         int needed = weaponSettings.magazineSize - currentAmmo;
-
-        // Не берём из резерва больше, чем там есть
         int amountToReload = Mathf.Min(needed, currentReserveAmmo);
-
         currentAmmo += amountToReload;
         currentReserveAmmo -= amountToReload;
-
         isReloading = false;
     }
 
     public void SetWeapon(WeaponData newWeapon)
     {
         weaponSettings = newWeapon;
-
-        if (weaponSettings == null)
-            return;
-
+        if (weaponSettings == null) return;
         currentAmmo = weaponSettings.magazineSize;
         currentReserveAmmo = weaponSettings.maxReserveAmmo;
         isReloading = false;
         lastShotTime = -999f;
-
-        if (recoilHandler != null)
-            recoilHandler.ResetRecoil();
-
-        Debug.Log($"Weapon switched to {weaponSettings.weaponName}");
+        if (recoilHandler != null) recoilHandler.ResetRecoil();
     }
 
-    // --- Добавить патронов в резерв (для будущих пикапов патронов) ---
     public void AddReserveAmmo(int amount)
     {
         if (weaponSettings == null) return;
         currentReserveAmmo = Mathf.Clamp(currentReserveAmmo + amount, 0, weaponSettings.maxReserveAmmo);
     }
 
-    // --- КОРУТИНА ДЛЯ ПОЛЕТА ТРЕЙСЕРА ---
     private System.Collections.IEnumerator SpawnTracer(TrailRenderer tracer, Vector3 hitPoint)
     {
         float time = 0;

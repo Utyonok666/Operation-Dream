@@ -7,12 +7,14 @@ public class NetworkWeapon : NetworkBehaviour
 
     public override void OnStartAuthority()
     {
-        weaponController.OnPlayerHit += OnPlayerHit;
+        if (weaponController != null)
+            weaponController.OnPlayerHit += OnPlayerHit;
     }
 
     public override void OnStopAuthority()
     {
-        weaponController.OnPlayerHit -= OnPlayerHit;
+        if (weaponController != null)
+            weaponController.OnPlayerHit -= OnPlayerHit;
     }
 
     private void OnDestroy()
@@ -20,11 +22,18 @@ public class NetworkWeapon : NetworkBehaviour
         if (!isOwned)
             return;
 
-        weaponController.OnPlayerHit -= OnPlayerHit;
+        if (weaponController != null)
+            weaponController.OnPlayerHit -= OnPlayerHit;
     }
 
     private void OnPlayerHit(RaycastHit hit, float damage)
     {
+        Debug.Log("OnPlayerHit вызван");
+
+
+        if (!isOwned)
+            return;
+
         NetworkIdentity identity = hit.collider.GetComponentInParent<NetworkIdentity>();
 
         if (identity == null)
@@ -44,6 +53,17 @@ public class NetworkWeapon : NetworkBehaviour
         if (health == null)
             return;
 
-        health.TakeDamage(Mathf.RoundToInt(damage));
+        if (health.CurrentHealth <= 0)
+            return;
+
+        health.TakeDamage(damage);
+
+        if (health.CurrentHealth <= 0)
+        {
+            PlayerDeath death = target.GetComponent<PlayerDeath>();
+
+            if (death != null)
+                death.ServerDie();
+        }
     }
 }

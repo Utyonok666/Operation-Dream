@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: ShotgunData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   weaponName: Shotgun
-  damage: 65
-  range: 20
+  damage: 80
+  range: 500
   minDistance: 8
   maxDistance: 16
   minDamageMultiplier: 0.2

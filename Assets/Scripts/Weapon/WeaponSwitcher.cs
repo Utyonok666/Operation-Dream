@@ -1,8 +1,13 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Mirror;
 
 public class WeaponSwitcher : MonoBehaviour
 {
+
+    
+    [SerializeField] private NetworkIdentity networkIdentity;
+
     [Header("Вторичное оружие (Пистолет)")]
     [SerializeField] private GameObject pistol;
 
@@ -17,6 +22,7 @@ public class WeaponSwitcher : MonoBehaviour
     private WeaponController activeWeaponController;
 
     public WeaponController ActiveWeapon => activeWeaponController;
+    public GameObject PistolWeapon => pistol;
 
     // Для мультиплеера
     public event System.Action<int> OnWeaponChanged;
@@ -25,6 +31,8 @@ public class WeaponSwitcher : MonoBehaviour
 
     private void Awake()
     {
+        networkIdentity = GetComponent<NetworkIdentity>();
+
         weapons[0] = assaultRifle;
         weapons[1] = smg;
         weapons[2] = shotgun;
@@ -34,11 +42,23 @@ public class WeaponSwitcher : MonoBehaviour
 
     private void Start()
     {
+        // Для чужих игроков в сети НЕ выставляем дефолт здесь -
+        // это сделает NetworkWeaponSwitcher.OnStartClient() на основе
+        // синхронизированного currentWeaponIndex. Если сделать это тут
+        // безусловно, возникает гонка: Start() может выполниться ПОСЛЕ
+        // OnStartClient() и затереть уже корректно применённое оружие
+        // обратно на assaultRifle.
+        if (networkIdentity != null && !networkIdentity.isOwned)
+            return;
+
         SetClass(assaultRifle);
     }
 
     private void Update()
     {
+        if (!networkIdentity.isOwned)
+            return;
+
         // ---- Выбор класса ----
         if (Keyboard.current.f1Key.wasPressedThisFrame)
             SetWeapon(0);
@@ -87,19 +107,27 @@ public class WeaponSwitcher : MonoBehaviour
         if (index < 0 || index >= weapons.Length)
             return;
 
-        GameObject weapon = weapons[index];
-
-        if (weapon == null)
+        if (index == 4)
+        {
+            EquipLoadout(pistol, true, notify ? 4 : -1);
             return;
+        }
 
-        // Если выбрали основное оружие — запоминаем его
-        if (index != 4)
-            currentPrimaryWeapon = weapon;
+        if (index >= 0 && index <= 3)
+        {
+            GameObject primaryWeapon = weapons[index];
+            if (primaryWeapon == null)
+                return;
 
-        EquipWeapon(weapon);
+            currentPrimaryWeapon = primaryWeapon;
+            EquipLoadout(primaryWeapon, true, notify ? index : -1);
+            return;
+        }
+    }
 
-        if (notify)
-            OnWeaponChanged?.Invoke(index);
+    public void SetClass(int classIndex)
+    {
+        SetWeapon(classIndex, true);
     }
 
     private void SetClass(GameObject primaryClassWeapon)
@@ -108,24 +136,29 @@ public class WeaponSwitcher : MonoBehaviour
             return;
 
         currentPrimaryWeapon = primaryClassWeapon;
-
-        EquipWeapon(currentPrimaryWeapon);
+        EquipLoadout(primaryClassWeapon, true, -1);
     }
 
-    private void EquipWeapon(GameObject weaponToEquip)
+    private void EquipLoadout(GameObject primaryWeapon, bool includePistol, int notifyIndex)
     {
-        if (weaponToEquip == null)
+        if (primaryWeapon == null)
             return;
 
-        if (pistol != null) pistol.SetActive(false);
-        if (assaultRifle != null) assaultRifle.SetActive(false);
-        if (smg != null) smg.SetActive(false);
-        if (shotgun != null) shotgun.SetActive(false);
-        if (sniper != null) sniper.SetActive(false);
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            if (weapons[i] != null)
+                weapons[i].SetActive(false);
+        }
 
-        activeWeapon = weaponToEquip;
-        activeWeapon.SetActive(true);
+        primaryWeapon.SetActive(true);
 
+        if (includePistol && pistol != null)
+            pistol.SetActive(true);
+
+        activeWeapon = primaryWeapon;
         activeWeaponController = activeWeapon.GetComponent<WeaponController>();
+
+        if (notifyIndex >= 0)
+            OnWeaponChanged?.Invoke(notifyIndex);
     }
 }

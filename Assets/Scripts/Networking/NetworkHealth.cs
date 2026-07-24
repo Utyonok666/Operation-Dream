@@ -10,13 +10,18 @@ public class NetworkHealth : NetworkBehaviour
 
     public override void OnStartServer()
     {
+        if (health == null)
+            health = GetComponent<Health>();
+
         health.OnHealthChanged += ServerHealthChanged;
+
         syncedHealth = health.CurrentHealth;
     }
 
     public override void OnStopServer()
     {
-        health.OnHealthChanged -= ServerHealthChanged;
+        if (health != null)
+            health.OnHealthChanged -= ServerHealthChanged;
     }
 
     private void ServerHealthChanged(int newHealth)
@@ -26,6 +31,7 @@ public class NetworkHealth : NetworkBehaviour
 
     private void OnHealthChanged(int oldHealth, int newHealth)
     {
+        // Сервер уже имеет правильное значение.
         if (isServer)
             return;
 

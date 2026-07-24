@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: SMGData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   weaponName: SMG
-  damage: 25
-  range: 60
+  damage: 12
+  range: 500
   minDistance: 30
   maxDistance: 60
   minDamageMultiplier: 0.2

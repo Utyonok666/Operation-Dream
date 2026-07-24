@@ -12,6 +12,11 @@ public class NetworkWeaponSwitcher : NetworkBehaviour
     {
         weaponSwitcher.OnWeaponChanged += LocalWeaponChanged;
     }
+ 
+   public override void OnStartClient()
+    {
+        weaponSwitcher.SetWeapon(currentWeaponIndex, false);
+    }
 
     public override void OnStopAuthority()
     {
@@ -31,6 +36,10 @@ public class NetworkWeaponSwitcher : NetworkBehaviour
 
     private void OnWeaponChanged(int oldIndex, int newIndex)
     {
+        // Владелец уже сам переключил оружие.
+        if (isOwned)
+            return;
+
         weaponSwitcher.SetWeapon(newIndex, false);
     }
 }
