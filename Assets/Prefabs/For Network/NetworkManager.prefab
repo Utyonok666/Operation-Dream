@@ -50,7 +50,7 @@ MonoBehaviour:
   runInBackground: 1
   headlessStartMode: 0
   editorAutoStart: 0
-  sendRate: 60
+  sendRate: 45
   offlineScene: 
   onlineScene: 
   offlineSceneLoadDelay: 0

@@ -179,6 +179,18 @@ public class PlayerMovement : NetworkBehaviour
         HandleHeadBob();
     }
 
+    private void OnEnable()
+    {
+        // Симметрично OnDisable(): при смерти PlayerDeath делает enabled = false,
+        // что выключает Input Actions карту через OnDisable(). Без этого OnEnable()
+        // после респавна (enabled = true) карта так и оставалась выключенной навсегда,
+        // и игрок терял управление после первой же смерти.
+        // isLocalPlayer-проверка обязательна: иначе на remote-инстансах чужих игроков
+        // тоже начнёт читаться ТВОЯ клавиатура/мышь, ломая их движение.
+        if (_inputActions != null && isLocalPlayer)
+            _inputActions.Player.Enable();
+    }
+
     private void OnDisable()
     {
         _inputActions.Player.Disable();

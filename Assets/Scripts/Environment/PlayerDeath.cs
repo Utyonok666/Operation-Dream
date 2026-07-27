@@ -43,6 +43,14 @@ public class PlayerDeath : NetworkBehaviour
     [SerializeField] private float weaponDropTorque = 1.6f;
 
     private bool isDead;
+    private GameObject droppedWeaponInstance;
+
+    // Исходная поза body (bodyVisual) до падения - нужна, чтобы вернуть труп
+    // в нормальную стоячую позу при респавне (иначе персонаж навсегда остаётся лежать).
+    private Vector3 bodyOriginalLocalPosition;
+    private Quaternion bodyOriginalLocalRotation;
+    private Vector3 bodyOriginalLocalScale;
+    private bool bodyOriginalCached;
 
     private void Awake()
     {
@@ -60,6 +68,34 @@ public class PlayerDeath : NetworkBehaviour
 
         if (weaponSwitcher == null)
             weaponSwitcher = GetComponentInChildren<WeaponSwitcher>(true);
+
+        CacheBodyOriginalPoseIfNeeded();
+    }
+
+    private void CacheBodyOriginalPoseIfNeeded()
+    {
+        if (bodyOriginalCached)
+            return;
+
+        Transform body = playerMovement != null ? playerMovement.BodyVisual : null;
+        if (body == null)
+            return;
+
+        bodyOriginalLocalPosition = body.localPosition;
+        bodyOriginalLocalRotation = body.localRotation;
+        bodyOriginalLocalScale = body.localScale;
+        bodyOriginalCached = true;
+    }
+
+    private void RestoreBodyPose()
+    {
+        Transform body = playerMovement != null ? playerMovement.BodyVisual : null;
+        if (body == null || !bodyOriginalCached)
+            return;
+
+        body.localPosition = bodyOriginalLocalPosition;
+        body.localRotation = bodyOriginalLocalRotation;
+        body.localScale = bodyOriginalLocalScale;
     }
 
     [Server]
@@ -73,16 +109,20 @@ public class PlayerDeath : NetworkBehaviour
         RpcDie(hitDirection);
     }
 
+    [Header("References")]
+    [SerializeField] private DeathMenuController deathMenuController;
+
     [ClientRpc]
     private void RpcDie(Vector3 hitDirection)
     {
-        if (isDead)
-            return;
-
+        if (isDead) return;
         isDead = true;
 
         if (health != null)
             health.SetHealth(0);
+
+        if (deathMenuController != null)
+            deathMenuController.ShowDeathMenu();
 
         StartCoroutine(DeathRoutine(hitDirection));
     }
@@ -189,6 +229,24 @@ public class PlayerDeath : NetworkBehaviour
         foreach (WeaponADS ads in GetComponentsInChildren<WeaponADS>(true))
             if (ads != null)
                 ads.enabled = false;
+
+        foreach (RecoilHandler rh in GetComponentsInChildren<RecoilHandler>(true))
+            if (rh != null)
+                rh.enabled = false;
+
+        // Прячем всё оружие, кроме того, что будет выброшено (DropWeapon) -
+        // иначе второй слот (например, пистолет) остаётся SetActive(true)
+        // и виден в руках трупа, будто игрок его "достал" сам.
+        foreach (WeaponController wc in GetComponentsInChildren<WeaponController>(true))
+        {
+            if (wc == null)
+                continue;
+
+            if (activeWeapon != null && wc.gameObject == activeWeapon.gameObject)
+                continue;
+
+            wc.gameObject.SetActive(false);
+        }
 
         return activeWeapon;
     }
@@ -377,30 +435,69 @@ public class PlayerDeath : NetworkBehaviour
     }
 
     [Command]
-    public void CmdRequestRespawn()
+    public void CmdRequestRespawn(int loadoutIndex)
     {
         if (health != null)
             health.Respawn();
 
-        RpcOnRespawn();
+        // Mirror сам ведёт список точек спавна (компонент NetworkStartPosition
+        // на объектах в сцене) и умеет отдавать их случайно/по кругу в зависимости
+        // от NetworkManager -> Player Spawn Method. Переиспользуем ту же систему
+        // для респавна, а не только для первого захода в матч.
+        Transform spawnPoint = NetworkManager.singleton != null
+            ? NetworkManager.singleton.GetStartPosition()
+            : null;
+
+        Vector3 spawnPosition = spawnPoint != null ? spawnPoint.position : transform.position;
+        Quaternion spawnRotation = spawnPoint != null ? spawnPoint.rotation : transform.rotation;
+
+        RpcOnRespawn(loadoutIndex, spawnPosition, spawnRotation);
     }
 
     [ClientRpc]
-    private void RpcOnRespawn()
+    private void RpcOnRespawn(int loadoutIndex, Vector3 spawnPosition, Quaternion spawnRotation)
     {
         RestoreCameraAfterDeath();
+        RestoreBodyPose();
 
-        if (playerMovement != null)
-            playerMovement.enabled = true;
+        if (deathMenuController != null)
+            deathMenuController.HideDeathMenu();
 
-        if (mouseLook != null)
-            mouseLook.enabled = true;
+        // CharacterController всё ещё выключен с момента смерти - можно спокойно
+        // переставить transform напрямую, не борясь с физикой/коллизиями.
+        transform.SetPositionAndRotation(spawnPosition, spawnRotation);
 
-        if (characterController != null)
-            characterController.enabled = true;
+        if (playerMovement != null) playerMovement.enabled = true;
+        if (mouseLook != null) mouseLook.enabled = true;
+        if (characterController != null) characterController.enabled = true;
 
-        if (health != null)
-            health.Respawn();
+        foreach (WeaponController wc in GetComponentsInChildren<WeaponController>(true))
+            if (wc != null) wc.enabled = true;
+
+        foreach (WeaponMovement wm in GetComponentsInChildren<WeaponMovement>(true))
+            if (wm != null) wm.enabled = true;
+
+        foreach (WeaponADS ads in GetComponentsInChildren<WeaponADS>(true))
+            if (ads != null) ads.enabled = true;
+
+        foreach (RecoilHandler rh in GetComponentsInChildren<RecoilHandler>(true))
+            if (rh != null) rh.enabled = true;
+
+        if (weaponSwitcher != null)
+        {
+            // loadoutIndex >= 0 - игрок выбрал класс в меню смерти (ChangeLodautMenu).
+            // -1 - ничего не выбирал, просто восстанавливаем тот же лоадаут, что был.
+            if (loadoutIndex >= 0)
+                weaponSwitcher.SetClass(loadoutIndex);
+            else
+                weaponSwitcher.ReapplyCurrentLoadout();
+        }
+
+        if (droppedWeaponInstance != null)
+        {
+            Destroy(droppedWeaponInstance);
+            droppedWeaponInstance = null;
+        }
 
         isDead = false;
     }
@@ -463,7 +560,11 @@ public class PlayerDeath : NetworkBehaviour
             ForceMode.Impulse);
 
         // Оружие исчезает синхронно с трупом (падение + лежание + уход под землю)
-        Destroy(weaponTransform.gameObject, fallDuration + corpseTime + sinkDuration);
+        // Раньше оружие удалялось по жёсткому таймеру (fallDuration + corpseTime + sinkDuration)
+        // независимо от того, зареспавнился игрок или нет - могло исчезнуть прямо
+        // во время того, как ты сидишь в меню смерти. Теперь оно лежит до тех пор,
+        // пока не произойдёт реальный респавн (см. RpcOnRespawn).
+        droppedWeaponInstance = weaponTransform.gameObject;
     }
 
     private void EnsureFittedCollider(Transform weaponTransform)

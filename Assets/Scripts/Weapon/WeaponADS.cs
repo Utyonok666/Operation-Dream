@@ -22,9 +22,11 @@ public class WeaponADS : MonoBehaviour
     private Vector3 adsPosition;
     private Quaternion adsRotation;
 
+    // Публичный флаг прицеливания для Mouse Look
+    public bool IsAiming { get; private set; }
+
     private void Start()
     {
-        // Если не назначили в инспекторе — ищем автоматически
         if (networkIdentity == null)
             networkIdentity = GetComponentInParent<NetworkIdentity>();
 
@@ -36,6 +38,8 @@ public class WeaponADS : MonoBehaviour
 
     private void CalculateADSPosition()
     {
+        if (aimPoint == null || playerCamera == null) return;
+
         Vector3 offset = transform.position - aimPoint.position;
 
         adsPosition = transform.parent.InverseTransformPoint(
@@ -46,17 +50,20 @@ public class WeaponADS : MonoBehaviour
 
     private void Update()
     {
+        // Если игра на паузе — пушка не "елозит"
+        if (PauseMenuController.Instance != null && PauseMenuController.Instance.IsPaused)
+            return;
+
         if (weaponController == null || weaponController.WeaponSettings == null)
             return;
 
-        // Чужому игроку запрещаем выполнять ADS
         if (networkIdentity != null && !networkIdentity.isOwned)
             return;
 
-        bool ads = Mouse.current.rightButton.isPressed;
+        IsAiming = Mouse.current.rightButton.isPressed;
 
-        Vector3 targetPos = ads ? adsPosition : idlePosition;
-        Quaternion targetRot = ads ? adsRotation : idleRotation;
+        Vector3 targetPos = IsAiming ? adsPosition : idlePosition;
+        Quaternion targetRot = IsAiming ? adsRotation : idleRotation;
 
         transform.localPosition = Vector3.Lerp(
             transform.localPosition,
@@ -68,7 +75,7 @@ public class WeaponADS : MonoBehaviour
             targetRot,
             adsSpeed * Time.deltaTime);
 
-        float targetFOV = ads
+        float targetFOV = IsAiming
             ? weaponController.WeaponSettings.adsFOV
             : baseFOV;
 
@@ -76,10 +83,5 @@ public class WeaponADS : MonoBehaviour
             playerCamera.fieldOfView,
             targetFOV,
             adsSpeed * Time.deltaTime);
-
-        if (Time.frameCount % 60 == 0)
-        {
-            Debug.Log($"Файл: {weaponController.WeaponSettings.name} | Текущий FOV: {playerCamera.fieldOfView} | Целевой: {targetFOV}");
-        }
     }
 }

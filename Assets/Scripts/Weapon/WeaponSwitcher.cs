@@ -59,18 +59,9 @@ public class WeaponSwitcher : MonoBehaviour
         if (!networkIdentity.isOwned)
             return;
 
-        // ---- Выбор класса ----
-        if (Keyboard.current.f1Key.wasPressedThisFrame)
-            SetWeapon(0);
-
-        if (Keyboard.current.f2Key.wasPressedThisFrame)
-            SetWeapon(1);
-
-        if (Keyboard.current.f3Key.wasPressedThisFrame)
-            SetWeapon(2);
-
-        if (Keyboard.current.f4Key.wasPressedThisFrame)
-            SetWeapon(3);
+        // F1-F4 больше не переключают класс оружия вживую - выбор класса
+        // теперь делается только через ChangeLoadout в меню смерти
+        // (DeathMenuController -> PlayerDeath.CmdRequestRespawn(loadoutIndex)).
 
         // ---- Достать оружие ----
         if (Keyboard.current.digit1Key.wasPressedThisFrame)
@@ -109,7 +100,7 @@ public class WeaponSwitcher : MonoBehaviour
 
         if (index == 4)
         {
-            EquipLoadout(pistol, true, notify ? 4 : -1);
+            EquipLoadout(pistol, notify ? 4 : -1);
             return;
         }
 
@@ -120,7 +111,7 @@ public class WeaponSwitcher : MonoBehaviour
                 return;
 
             currentPrimaryWeapon = primaryWeapon;
-            EquipLoadout(primaryWeapon, true, notify ? index : -1);
+            EquipLoadout(primaryWeapon, notify ? index : -1);
             return;
         }
     }
@@ -130,18 +121,30 @@ public class WeaponSwitcher : MonoBehaviour
         SetWeapon(classIndex, true);
     }
 
+    /// <summary>
+    /// Заново включает GameObject текущего оружия.
+    /// Нужно вызывать при респавне, если оружие было скрыто (например, PlayerDeath
+    /// прятал не-выброшенные стволы через SetActive(false)).
+    /// </summary>
+    public void ReapplyCurrentLoadout()
+    {
+        GameObject primary = currentPrimaryWeapon != null ? currentPrimaryWeapon : assaultRifle;
+        EquipLoadout(primary, -1);
+    }
+
     private void SetClass(GameObject primaryClassWeapon)
     {
         if (primaryClassWeapon == null)
             return;
 
         currentPrimaryWeapon = primaryClassWeapon;
-        EquipLoadout(primaryClassWeapon, true, -1);
+        EquipLoadout(primaryClassWeapon, -1);
     }
 
-    private void EquipLoadout(GameObject primaryWeapon, bool includePistol, int notifyIndex)
+    // Включает ТОЛЬКО переданное оружие, все остальные (включая пистолет) - выключены.
+    private void EquipLoadout(GameObject weaponToEquip, int notifyIndex)
     {
-        if (primaryWeapon == null)
+        if (weaponToEquip == null)
             return;
 
         for (int i = 0; i < weapons.Length; i++)
@@ -150,12 +153,9 @@ public class WeaponSwitcher : MonoBehaviour
                 weapons[i].SetActive(false);
         }
 
-        primaryWeapon.SetActive(true);
+        weaponToEquip.SetActive(true);
 
-        if (includePistol && pistol != null)
-            pistol.SetActive(true);
-
-        activeWeapon = primaryWeapon;
+        activeWeapon = weaponToEquip;
         activeWeaponController = activeWeapon.GetComponent<WeaponController>();
 
         if (notifyIndex >= 0)

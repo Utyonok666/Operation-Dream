@@ -25,6 +25,16 @@ public class PlayerHUD : MonoBehaviour
     private int lastHealth;
     private bool isDead;
 
+    // --- Переменные кэша для GC Оптимизации ---
+    private int lastAmmo = -1;
+    private int lastReserveAmmo = -1;
+    private bool? lastIsReloading = null;
+    private WeaponController lastWeapon = null;
+
+    private int lastDisplayedHealth = -1;
+    private Color? lastHealthBarColor = null;
+    // ------------------------------------------
+
     private readonly Color fullHealthColor = new Color(0.2f, 0.9f, 0.2f);
     private readonly Color mediumHealthColor = new Color(1f, 0.85f, 0.1f);
     private readonly Color lowHealthColor = new Color(0.9f, 0.15f, 0.15f);
@@ -109,72 +119,129 @@ public class PlayerHUD : MonoBehaviour
 
         if (damageOverlay != null)
             damageOverlay.gameObject.SetActive(showHud);
-
-        // Only hide the normal HUD on death; no built-in respawn menu logic here.
     }
 
     private void UpdateAmmo()
     {
+        if (weaponSwitcher == null)
+            return;
+
         WeaponController weapon = weaponSwitcher.ActiveWeapon;
 
+        // Если нет активного оружия
         if (weapon == null)
         {
-            ammoText.text = "";
-            reloadText.gameObject.SetActive(false);
+            if (lastWeapon != null)
+            {
+                if (ammoText != null) ammoText.text = "";
+                if (reloadText != null) reloadText.gameObject.SetActive(false);
+                ResetAmmoCache();
+            }
             return;
         }
 
-        ammoText.text = $"{weapon.CurrentAmmo} / {weapon.CurrentReserveAmmo}";
-        reloadText.gameObject.SetActive(weapon.IsReloading);
+        int currentAmmo = weapon.CurrentAmmo;
+        int currentReserve = weapon.CurrentReserveAmmo;
+        bool isReloading = weapon.IsReloading;
+
+        // Обновляем текст патронов только если сменилось оружие или количество
+        if (weapon != lastWeapon || currentAmmo != lastAmmo || currentReserve != lastReserveAmmo)
+        {
+            if (ammoText != null)
+                ammoText.SetText("{0} / {1}", currentAmmo, currentReserve); // Zero GC allocation
+
+            lastAmmo = currentAmmo;
+            lastReserveAmmo = currentReserve;
+        }
+
+        // Обновляем статус перезарядки только при изменении состояния
+        if (weapon != lastWeapon || lastIsReloading == null || isReloading != lastIsReloading.Value)
+        {
+            if (reloadText != null)
+                reloadText.gameObject.SetActive(isReloading);
+
+            lastIsReloading = isReloading;
+        }
+
+        lastWeapon = weapon;
     }
 
     private void UpdateHealth()
     {
-        float targetPercent =
-            (float)playerHealth.CurrentHealth / playerHealth.MaxHealth;
+        if (playerHealth == null)
+            return;
 
-        currentHealthPercent = Mathf.Lerp(
-            currentHealthPercent,
-            targetPercent,
-            Time.deltaTime * 10f);
+        int currentHealth = playerHealth.CurrentHealth;
 
-        healthBar.rectTransform.localScale =
-            new Vector3(1f, currentHealthPercent, 1f);
-
-        healthText.text = playerHealth.CurrentHealth.ToString();
-
-        if (targetPercent > 0.6f)
+        // 1. Текст хп — обновляется ТОЛЬКО при изменении числа (Zero GC allocation)
+        if (currentHealth != lastDisplayedHealth)
         {
-            healthBar.color = fullHealthColor;
+            if (healthText != null)
+                healthText.SetText("{0}", currentHealth);
+
+            lastDisplayedHealth = currentHealth;
         }
-        else if (targetPercent > 0.3f)
+
+        // 2. Плавный fillAmount для HealthBar
+        float targetPercent = playerHealth.MaxHealth > 0 
+            ? (float)currentHealth / playerHealth.MaxHealth 
+            : 0f;
+
+        if (Mathf.Abs(currentHealthPercent - targetPercent) > 0.0001f)
         {
-            healthBar.color = mediumHealthColor;
+            currentHealthPercent = Mathf.Lerp(currentHealthPercent, targetPercent, Time.deltaTime * 10f);
+            if (healthBar != null)
+                healthBar.fillAmount = currentHealthPercent;
         }
-        else
+        else if (healthBar != null && healthBar.fillAmount != targetPercent)
         {
-            healthBar.color = lowHealthColor;
+            currentHealthPercent = targetPercent;
+            healthBar.fillAmount = targetPercent;
+        }
+
+        // 3. Цвет полоски — обновляется ТОЛЬКО если сменился цветовой диапазон
+        Color targetColor = targetPercent > 0.6f ? fullHealthColor :
+                            targetPercent > 0.3f ? mediumHealthColor : lowHealthColor;
+
+        if (healthBar != null && lastHealthBarColor != targetColor)
+        {
+            healthBar.color = targetColor;
+            lastHealthBarColor = targetColor;
         }
     }
 
     private void UpdateDamageFlash()
     {
-        if (playerHealth.CurrentHealth < lastHealth)
+        if (playerHealth == null || damageOverlay == null)
+            return;
+
+        int currentHealth = playerHealth.CurrentHealth;
+
+        // Вспышка при получении урона
+        if (currentHealth < lastHealth)
         {
             Color color = damageOverlay.color;
             color.a = 0.35f;
             damageOverlay.color = color;
         }
 
+        // Затухание вспышки (выполняется только пока альфа больше 0)
         Color fade = damageOverlay.color;
+        if (fade.a > 0.001f)
+        {
+            fade.a = Mathf.Lerp(fade.a, 0f, Time.deltaTime * 8f);
+            if (fade.a <= 0.001f) fade.a = 0f;
+            damageOverlay.color = fade;
+        }
 
-        fade.a = Mathf.Lerp(
-            fade.a,
-            0f,
-            Time.deltaTime * 8f);
+        lastHealth = currentHealth;
+    }
 
-        damageOverlay.color = fade;
-
-        lastHealth = playerHealth.CurrentHealth;
+    private void ResetAmmoCache()
+    {
+        lastWeapon = null;
+        lastAmmo = -1;
+        lastReserveAmmo = -1;
+        lastIsReloading = null;
     }
 }
