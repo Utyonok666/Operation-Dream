@@ -44,6 +44,11 @@ public class PlayerDeath : NetworkBehaviour
 
     private bool isDead;
     private GameObject droppedWeaponInstance;
+    
+    // Переменные для возврата оружия при респавне
+    private Transform weaponOriginalParent;
+    private Vector3 weaponOriginalLocalPosition;
+    private Quaternion weaponOriginalLocalRotation;
 
     // Исходная поза body (bodyVisual) до падения - нужна, чтобы вернуть труп
     // в нормальную стоячую позу при респавне (иначе персонаж навсегда остаётся лежать).
@@ -471,8 +476,38 @@ public class PlayerDeath : NetworkBehaviour
         if (mouseLook != null) mouseLook.enabled = true;
         if (characterController != null) characterController.enabled = true;
 
+        // 1. СНАЧАЛА возвращаем выброшенное оружие обратно в иерархию игрока
+        if (droppedWeaponInstance != null)
+        {
+            droppedWeaponInstance.transform.SetParent(weaponOriginalParent, true);
+            droppedWeaponInstance.transform.localPosition = weaponOriginalLocalPosition;
+            droppedWeaponInstance.transform.localRotation = weaponOriginalLocalRotation;
+
+            // Убираем физику (Rigidbody), которую мы накинули при падении
+            Rigidbody rb = droppedWeaponInstance.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                Destroy(rb);
+            }
+
+            // Отключаем коллайдеры
+            foreach (Collider col in droppedWeaponInstance.GetComponentsInChildren<Collider>(true))
+            {
+                col.enabled = false;
+            }
+
+            droppedWeaponInstance = null;
+        }
+
+        // 2. ТЕПЕРЬ включаем все скрипты и сбрасываем ВСЁ оружие (включая то, что только что вернули)
         foreach (WeaponController wc in GetComponentsInChildren<WeaponController>(true))
-            if (wc != null) wc.enabled = true;
+        {
+            if (wc != null)
+            {
+                wc.enabled = true;
+                wc.ResetWeapon();
+            }
+        }
 
         foreach (WeaponMovement wm in GetComponentsInChildren<WeaponMovement>(true))
             if (wm != null) wm.enabled = true;
@@ -483,20 +518,13 @@ public class PlayerDeath : NetworkBehaviour
         foreach (RecoilHandler rh in GetComponentsInChildren<RecoilHandler>(true))
             if (rh != null) rh.enabled = true;
 
+        // 3. В конце настраиваем выбранный класс / лоадаут
         if (weaponSwitcher != null)
         {
-            // loadoutIndex >= 0 - игрок выбрал класс в меню смерти (ChangeLodautMenu).
-            // -1 - ничего не выбирал, просто восстанавливаем тот же лоадаут, что был.
             if (loadoutIndex >= 0)
                 weaponSwitcher.SetClass(loadoutIndex);
             else
                 weaponSwitcher.ReapplyCurrentLoadout();
-        }
-
-        if (droppedWeaponInstance != null)
-        {
-            Destroy(droppedWeaponInstance);
-            droppedWeaponInstance = null;
         }
 
         isDead = false;
@@ -522,6 +550,11 @@ public class PlayerDeath : NetworkBehaviour
     private void DropWeapon(WeaponController weapon, Vector3 fallDirXZ)
     {
         Transform weaponTransform = weapon.transform;
+
+        // Запоминаем оригинального родителя и позицию
+        weaponOriginalParent = weaponTransform.parent;
+        weaponOriginalLocalPosition = weaponTransform.localPosition;
+        weaponOriginalLocalRotation = weaponTransform.localRotation;
 
         // Отвязываем от игрока, сохраняя мировую позицию/поворот -
         // оружие остаётся лежать там же, где было в руке.

@@ -87,7 +87,8 @@ public class WeaponController : MonoBehaviour
         if (networkIdentity == null || !networkIdentity.isLocalPlayer)
             return;
 
-        if (weaponSettings == null)
+        // Пауза: не обрабатываем ввод оружия, пока открыто меню паузы
+        if (PauseMenuController.Instance != null && PauseMenuController.Instance.IsPaused)
             return;
 
         if (weaponSettings == null)
@@ -430,5 +431,30 @@ public class WeaponController : MonoBehaviour
 
         tracer.transform.position = hitPoint;
         Destroy(tracer.gameObject, tracer.time);
+    }
+
+    /// <summary>
+    /// Принудительно сбрасывает статус перезарядки и полностью восстанавливает патроны (вызывается при респавне).
+    /// </summary>
+    private void OnEnable()
+    {
+        // При любом включении объекта принудительно снимаем флаг перезарядки
+        isReloading = false;
+        _reloadCoroutine = null;
+    }
+
+    public void ResetWeapon()
+    {
+        StopAllCoroutines();
+        isReloading = false;
+        _reloadCoroutine = null;
+
+        if (weaponSettings != null)
+        {
+            currentAmmo = weaponSettings.magazineSize;
+            currentReserveAmmo = weaponSettings.maxReserveAmmo;
+        }
+
+        lastShotTime = -999f;
     }
 }

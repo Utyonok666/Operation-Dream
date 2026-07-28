@@ -11,9 +11,6 @@ public class PlayerHUD : MonoBehaviour
     [Header("Ammo")]
     [SerializeField] private TMP_Text ammoText;
 
-    [Header("Reload")]
-    [SerializeField] private TMP_Text reloadText;
-
     [Header("Health")]
     [SerializeField] private TMP_Text healthText;
     [SerializeField] private Image healthBar;
@@ -28,7 +25,6 @@ public class PlayerHUD : MonoBehaviour
     // --- Переменные кэша для GC Оптимизации ---
     private int lastAmmo = -1;
     private int lastReserveAmmo = -1;
-    private bool? lastIsReloading = null;
     private WeaponController lastWeapon = null;
 
     private int lastDisplayedHealth = -1;
@@ -108,9 +104,6 @@ public class PlayerHUD : MonoBehaviour
         if (ammoText != null)
             ammoText.gameObject.SetActive(showHud);
 
-        if (reloadText != null)
-            reloadText.gameObject.SetActive(showHud);
-
         if (healthText != null)
             healthText.gameObject.SetActive(showHud);
 
@@ -134,7 +127,6 @@ public class PlayerHUD : MonoBehaviour
             if (lastWeapon != null)
             {
                 if (ammoText != null) ammoText.text = "";
-                if (reloadText != null) reloadText.gameObject.SetActive(false);
                 ResetAmmoCache();
             }
             return;
@@ -142,7 +134,6 @@ public class PlayerHUD : MonoBehaviour
 
         int currentAmmo = weapon.CurrentAmmo;
         int currentReserve = weapon.CurrentReserveAmmo;
-        bool isReloading = weapon.IsReloading;
 
         // Обновляем текст патронов только если сменилось оружие или количество
         if (weapon != lastWeapon || currentAmmo != lastAmmo || currentReserve != lastReserveAmmo)
@@ -152,15 +143,6 @@ public class PlayerHUD : MonoBehaviour
 
             lastAmmo = currentAmmo;
             lastReserveAmmo = currentReserve;
-        }
-
-        // Обновляем статус перезарядки только при изменении состояния
-        if (weapon != lastWeapon || lastIsReloading == null || isReloading != lastIsReloading.Value)
-        {
-            if (reloadText != null)
-                reloadText.gameObject.SetActive(isReloading);
-
-            lastIsReloading = isReloading;
         }
 
         lastWeapon = weapon;
@@ -242,6 +224,5 @@ public class PlayerHUD : MonoBehaviour
         lastWeapon = null;
         lastAmmo = -1;
         lastReserveAmmo = -1;
-        lastIsReloading = null;
     }
 }

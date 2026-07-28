@@ -1061,7 +1061,7 @@ AudioSource:
   m_GameObject: {fileID: 706119031520724816}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4410235011190912910, guid: cf8347ea574e24b4984802022f5827d9, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -2207,7 +2207,7 @@ AudioSource:
   m_GameObject: {fileID: 1613482948408744984}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4410235011190912910, guid: cf8347ea574e24b4984802022f5827d9, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -2573,6 +2573,7 @@ RectTransform:
   - {fileID: 5918961382968176086}
   - {fileID: 8119188692603271452}
   - {fileID: 4521734772525831262}
+  - {fileID: 2673980660409683722}
   m_Father: {fileID: 7687811168784818405}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -2615,10 +2616,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
-  m_UiScaleMode: 0
+  m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 600}
+  m_ReferenceResolution: {x: 1920, y: 1080}
   m_ScreenMatchMode: 0
   m_MatchWidthOrHeight: 0
   m_PhysicalUnit: 3
@@ -2658,7 +2659,6 @@ MonoBehaviour:
   weaponSwitcher: {fileID: 2398815939648709579}
   playerHealth: {fileID: 6508350765176610392}
   ammoText: {fileID: 8598911408392313603}
-  reloadText: {fileID: 7815450880874572842}
   healthText: {fileID: 1299502667675029690}
   healthBar: {fileID: 2687794240731277181}
   damageOverlay: {fileID: 6861753614983996066}
@@ -2720,7 +2720,7 @@ AudioSource:
   m_GameObject: {fileID: 2201574071253765158}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4410235011190912910, guid: cf8347ea574e24b4984802022f5827d9, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -2918,7 +2918,7 @@ AudioSource:
   m_GameObject: {fileID: 2333067851873785442}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4410235011190912910, guid: cf8347ea574e24b4984802022f5827d9, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -4737,7 +4737,7 @@ AudioSource:
   m_GameObject: {fileID: 3841702396045878872}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4410235011190912910, guid: cf8347ea574e24b4984802022f5827d9, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
@@ -5742,7 +5742,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4637113021434584322}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 399}
   m_LocalScale: {x: 1.02, y: 1.02, z: 1.02}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -7307,19 +7307,19 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6276251677034347238}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 571342502055313354}
-  m_Father: {fileID: 7687811168784818405}
+  m_Father: {fileID: 1185149131544437374}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
-  m_Pivot: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 960, y: 540}
+  m_SizeDelta: {x: 1920, y: 1080}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &5714622924121339533
 Canvas:
   m_ObjectHideFlags: 0
@@ -7355,10 +7355,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
-  m_UiScaleMode: 0
+  m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 600}
+  m_ReferenceResolution: {x: 1920, y: 1080}
   m_ScreenMatchMode: 0
   m_MatchWidthOrHeight: 0
   m_PhysicalUnit: 3
@@ -9104,6 +9104,7 @@ GameObject:
   - component: {fileID: 4836859213292530886}
   - component: {fileID: 7116852613683366859}
   - component: {fileID: 1222385481060592024}
+  - component: {fileID: 5353878661733226316}
   m_Layer: 6
   m_Name: Player
   m_TagString: Player
@@ -9127,7 +9128,6 @@ Transform:
   - {fileID: 3694476777309929376}
   - {fileID: 7208086114928613517}
   - {fileID: 1185149131544437374}
-  - {fileID: 2673980660409683722}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!143 &4192988049280903201
@@ -9464,6 +9464,29 @@ MonoBehaviour:
   rotationSensitivity: 0.01
   positionPrecision: 0.01
   scalePrecision: 0.01
+--- !u!114 &5353878661733226316
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8101883634354551124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 738152d57e86ba146beb8c31716d4e00, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSkin
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  skins:
+  - {fileID: 2100000, guid: e9ab14b674fc9c04984e69685629cd1c, type: 2}
+  - {fileID: 2100000, guid: 24a52252efaa17245afef176387b014e, type: 2}
+  - {fileID: 2100000, guid: 7fd9b66e801eaaa45a4465597e2375af, type: 2}
+  - {fileID: 2100000, guid: b906f1c89b8a0354dbff3a01f2d4cc33, type: 2}
+  - {fileID: 2100000, guid: 32bdd290cb81ceb40ace5f36dc4612ec, type: 2}
+  - {fileID: 2100000, guid: 5bf3f52e25938a64c93b31879944818f, type: 2}
+  - {fileID: 2100000, guid: 3f5eff8fe1664554c82b01ca7df2c28c, type: 2}
 --- !u!1 &8380086004456567833
 GameObject:
   m_ObjectHideFlags: 0
