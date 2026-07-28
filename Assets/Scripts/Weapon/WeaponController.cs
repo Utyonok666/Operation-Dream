@@ -15,6 +15,10 @@ public class WeaponController : MonoBehaviour
     [SerializeField] private Transform muzzlePoint;
     [SerializeField] private Transform shellEjectPoint;
 
+    [Header("Audio")]
+    [Tooltip("3D AudioSource на модели оружия (spatialBlend=1). Один на выстрел+перезарядку, PlayOneShot не блокирует друг друга.")]
+    [SerializeField] private AudioSource weaponAudioSource;
+
     public WeaponData WeaponSettings => weaponSettings;
 
     // --- Публичные геттеры для UI (счётчик патронов и т.д.) ---
@@ -28,6 +32,8 @@ public class WeaponController : MonoBehaviour
     private bool isReloading;
     private bool isADS;
     private float lastShotTime = -999f;
+    private int _lastShootSoundIndex = -1;
+    private Coroutine _reloadCoroutine;
 
     // Событие, которое будет использовать NetworkWeapon
     public event System.Action<RaycastHit, float> OnPlayerHit;
@@ -40,6 +46,9 @@ public class WeaponController : MonoBehaviour
     
     // Событие для дублёра визуальных эффектов (NetworkWeaponEffects)
     public event System.Action OnWeaponFired;
+
+    // Событие для дублёра: начало перезарядки (звук/анимация у остальных клиентов)
+    public event System.Action OnWeaponReloadStarted;
 
     private void Awake()
     {
@@ -66,6 +75,7 @@ public class WeaponController : MonoBehaviour
         {
             StopAllCoroutines();
             isReloading = false;
+            _reloadCoroutine = null;
         }
     }
 
@@ -90,14 +100,21 @@ public class WeaponController : MonoBehaviour
             : Mouse.current.leftButton.wasPressedThisFrame;
 
         if (shouldShoot)
+        {
+            // Дробовик: выстрел прерывает дозарядку гильз (не долистываем до полного магазина).
+            // currentAmmo > 0 - должна быть хотя бы 1 гильза в стволе, иначе стрелять нечем.
+            if (isReloading && weaponSettings.perShellReload && currentAmmo > 0)
+                InterruptReload();
+
             Shoot();
+        }
 
         if (Keyboard.current.rKey.wasPressedThisFrame &&
             !isReloading &&
             currentAmmo < weaponSettings.magazineSize &&
             currentReserveAmmo > 0)
         {
-            StartCoroutine(Reload());
+            _reloadCoroutine = StartCoroutine(Reload());
         }
     }
 
@@ -129,6 +146,7 @@ public class WeaponController : MonoBehaviour
 
         // --- ЛОКАЛЬНЫЕ ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ---
         PlayVisualEffectsOnly();
+        PlayShootAudio();
 
         // --- СИГНАЛ В СЕТЬ ДЛЯ ДРУГИХ ИГРОКОВ ---
         OnWeaponFired?.Invoke();
@@ -165,6 +183,46 @@ public class WeaponController : MonoBehaviour
         }
     }
 
+    // AudioSource стоит прямо на оружии (в сцене - у каждого игрока свой инстанс),
+    // поэтому 3D-позиция сама следует за игроком без ручной синхронизации позиции,
+    // в отличие от шагов, где источник статичен на момент выстрела.
+    public void PlayShootAudio()
+    {
+        if (weaponAudioSource == null || weaponSettings == null) return;
+        if (weaponSettings.shootSounds == null || weaponSettings.shootSounds.Length == 0) return;
+
+        AudioClip clip = PickShootClip();
+        if (clip == null) return;
+
+        weaponAudioSource.PlayOneShot(clip, weaponSettings.shootVolume);
+    }
+
+    // Вызывается из Reload() локально, и из NetworkWeaponEffects на остальных клиентах
+    public void PlayReloadAudio()
+    {
+        if (weaponAudioSource == null || weaponSettings == null) return;
+        if (weaponSettings.reloadSound == null) return;
+
+        weaponAudioSource.PlayOneShot(weaponSettings.reloadSound, weaponSettings.reloadVolume);
+    }
+
+    private AudioClip PickShootClip()
+    {
+        AudioClip[] clips = weaponSettings.shootSounds;
+
+        if (clips.Length == 1)
+            return clips[0];
+
+        int index;
+        do
+        {
+            index = Random.Range(0, clips.Length);
+        } while (index == _lastShootSoundIndex);
+
+        _lastShootSoundIndex = index;
+        return clips[index];
+    }
+
     // =========================================================================
     // НОВЫЕ МЕТОДЫ: Имитация выстрела для других игроков (БЕЗ УРОНА)
     // =========================================================================
@@ -174,6 +232,7 @@ public class WeaponController : MonoBehaviour
 
         // 1. Вспышка и гильза
         PlayVisualEffectsOnly();
+        PlayShootAudio();
 
         // 2. Трассеры и эффекты попадания для каждого патрона/дробинки
         int pellets = Mathf.Max(1, weaponSettings.pelletCount);
@@ -296,11 +355,47 @@ public class WeaponController : MonoBehaviour
     private System.Collections.IEnumerator Reload()
     {
         isReloading = true;
-        yield return new WaitForSeconds(weaponSettings.reloadTime);
-        int needed = weaponSettings.magazineSize - currentAmmo;
-        int amountToReload = Mathf.Min(needed, currentReserveAmmo);
-        currentAmmo += amountToReload;
-        currentReserveAmmo -= amountToReload;
+
+        if (weaponSettings.perShellReload)
+        {
+            // По одной гильзе: звук на каждую, можно прервать выстрелом (InterruptReload).
+            while (currentAmmo < weaponSettings.magazineSize && currentReserveAmmo > 0)
+            {
+                yield return new WaitForSeconds(weaponSettings.shellReloadTime);
+
+                PlayReloadAudio();
+                OnWeaponReloadStarted?.Invoke();
+
+                currentAmmo++;
+                currentReserveAmmo--;
+            }
+        }
+        else
+        {
+            PlayReloadAudio();
+            OnWeaponReloadStarted?.Invoke();
+
+            yield return new WaitForSeconds(weaponSettings.reloadTime);
+
+            int needed = weaponSettings.magazineSize - currentAmmo;
+            int amountToReload = Mathf.Min(needed, currentReserveAmmo);
+            currentAmmo += amountToReload;
+            currentReserveAmmo -= amountToReload;
+        }
+
+        isReloading = false;
+        _reloadCoroutine = null;
+    }
+
+    /// <summary>Прерывает дозарядку гильз досрочно (напр. выстрел на 5 из 8) - оставляет уже заряженные патроны.</summary>
+    private void InterruptReload()
+    {
+        if (_reloadCoroutine != null)
+        {
+            StopCoroutine(_reloadCoroutine);
+            _reloadCoroutine = null;
+        }
+
         isReloading = false;
     }
 

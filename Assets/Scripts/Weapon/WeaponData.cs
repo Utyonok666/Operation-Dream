@@ -18,6 +18,10 @@ public class WeaponData : ScriptableObject
     public int maxReserveAmmo = 300; // Запас патронов помимо магазина. Настраивается вручную под каждую пушку (АК: 30/300, дробовик: 8/56 и т.д.)
     public float reloadTime = 2f;
 
+    [Header("Перезарядка по гильзам (дробовик)")]
+    public bool perShellReload = false; // true - заряжает по одной гильзе, можно прервать выстрелом
+    public float shellReloadTime = 0.5f; // время заряда ОДНОЙ гильзы (используется только если perShellReload)
+
     [Header("Разброс и отдача")]
     public float bloomAngle = 2f; // Разброс для одиночных (в градусах)
     public float recoilForce = 0.1f; // Насколько камера дергается вверх
@@ -42,4 +46,10 @@ public class WeaponData : ScriptableObject
     public GameObject muzzleFlashPrefab; // Сюда закинешь вспышку, когда появится
     public GameObject shellPrefab;       // Сюда закидывай свой префаб патрона
     public TrailRenderer tracerPrefab;  // Сюда закидывай свой префаб трассера
+
+    [Header("Audio")]
+    public AudioClip[] shootSounds;   // несколько вариантов - чтобы не звучало как заезженная пластинка
+    public AudioClip reloadSound;
+    [Range(0f, 1f)] public float shootVolume = 1f;
+    [Range(0f, 1f)] public float reloadVolume = 0.8f;
 }

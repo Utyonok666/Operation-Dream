@@ -16,6 +16,7 @@ public class NetworkWeaponEffects : NetworkBehaviour
         {
             // Подписываемся на выстрел каждой пушки
             weapon.OnWeaponFired += LocalWeaponFired;
+            weapon.OnWeaponReloadStarted += LocalWeaponReloaded;
         }
     }
 
@@ -29,6 +30,7 @@ public class NetworkWeaponEffects : NetworkBehaviour
         {
             // Отписываемся при уничтожении объекта/отключении
             weapon.OnWeaponFired -= LocalWeaponFired;
+            weapon.OnWeaponReloadStarted -= LocalWeaponReloaded;
         }
     }
 
@@ -55,6 +57,30 @@ public class NetworkWeaponEffects : NetworkBehaviour
         if (weaponSwitcher != null && weaponSwitcher.ActiveWeapon != null)
         {
             weaponSwitcher.ActiveWeapon.PlayRemoteVisuals();
+        }
+    }
+
+    private void LocalWeaponReloaded()
+    {
+        // Вызывается локально в момент старта перезарядки активной пушки
+        CmdPlayReloadEffect();
+    }
+
+    [Command]
+    private void CmdPlayReloadEffect()
+    {
+        RpcPlayReloadEffect();
+    }
+
+    [ClientRpc]
+    private void RpcPlayReloadEffect()
+    {
+        if (isLocalPlayer)
+            return;
+
+        if (weaponSwitcher != null && weaponSwitcher.ActiveWeapon != null)
+        {
+            weaponSwitcher.ActiveWeapon.PlayReloadAudio();
         }
     }
 }

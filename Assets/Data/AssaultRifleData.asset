@@ -35,3 +35,8 @@ MonoBehaviour:
   muzzleFlashPrefab: {fileID: 3735165956315205474, guid: 43461c2da6dd59b4d8d201a0cc6f831c, type: 3}
   shellPrefab: {fileID: 7321383152298011136, guid: 1e0abf434552f4d449c187f4c1659321, type: 3}
   tracerPrefab: {fileID: 7402264872716325727, guid: 6dbd1a4bc4969034c910d58f31055dad, type: 3}
+  shootSounds:
+  - {fileID: 8300000, guid: a383b1ed525eb1246abecda933ec5412, type: 3}
+  reloadSound: {fileID: 8300000, guid: 6fdaa41206281ef429e6e46435bdc520, type: 3}
+  shootVolume: 1
+  reloadVolume: 1

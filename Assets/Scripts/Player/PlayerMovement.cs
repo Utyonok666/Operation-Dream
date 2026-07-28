@@ -67,6 +67,7 @@ public class PlayerMovement : NetworkBehaviour
     // ==================== REFERENCES ====================
     [Header("References")]
     [SerializeField] private MouseLook mouseLook;
+    [SerializeField] private NetworkFootstepAudio footstepAudio;
 
     // ==================== COMPONENTS / INPUT ====================
     private CharacterController _controller;
@@ -91,6 +92,7 @@ public class PlayerMovement : NetworkBehaviour
     private float _bobTimer;
     private float _defaultCamY;
     private float _currentCamCrouchOffset;
+    private float _prevBobSin; // для детекта момента "шага" - пересечение синусоидой нуля
 
     // ==================== CROUCH CACHE ====================
     private float _originalHeight;
@@ -476,13 +478,23 @@ public class PlayerMovement : NetworkBehaviour
 
             _bobTimer += Time.deltaTime * bobSpeed * speedMultiplier;
 
-            float yOffset = Mathf.Sin(_bobTimer) * bobAmount * speedMultiplier;
+            float bobSin = Mathf.Sin(_bobTimer);
+            float yOffset = bobSin * bobAmount * speedMultiplier;
 
             cameraTransform.localPosition = new Vector3(0, baseY + yOffset, 0);
+
+            // Момент шага = восходящее пересечение синусоидой нуля (1 раз за цикл bob).
+            bool crossedZero = _prevBobSin <= 0f && bobSin > 0f;
+
+            if (crossedZero && footstepAudio != null)
+                footstepAudio.TriggerFootstep(_isRunning);
+
+            _prevBobSin = bobSin;
         }
         else
         {
             _bobTimer = 0f;
+            _prevBobSin = 0f;
 
             cameraTransform.localPosition = Vector3.Lerp(
                 cameraTransform.localPosition,

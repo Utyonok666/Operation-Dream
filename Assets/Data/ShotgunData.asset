@@ -22,6 +22,8 @@ MonoBehaviour:
   magazineSize: 8
   maxReserveAmmo: 56
   reloadTime: 4
+  perShellReload: 1
+  shellReloadTime: 0.6
   bloomAngle: 2
   recoilForce: 5
   adsBloomMultiplier: 0.01
@@ -35,3 +37,8 @@ MonoBehaviour:
   muzzleFlashPrefab: {fileID: 3735165956315205474, guid: 43461c2da6dd59b4d8d201a0cc6f831c, type: 3}
   shellPrefab: {fileID: 6208515588565704, guid: 9ac0e756dea460647a4781cb0432da11, type: 3}
   tracerPrefab: {fileID: 7402264872716325727, guid: 6dbd1a4bc4969034c910d58f31055dad, type: 3}
+  shootSounds:
+  - {fileID: 8300000, guid: 1b6297db8de64a9408d7c9edcb4af920, type: 3}
+  reloadSound: {fileID: 8300000, guid: 23669b5b48ed6c34cb46ddf0440f1d87, type: 3}
+  shootVolume: 1
+  reloadVolume: 1
