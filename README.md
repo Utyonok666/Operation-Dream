@@ -62,6 +62,10 @@ This project was built as a hands-on Unity gameplay and networking prototype.
 It demonstrates overall game systems architecture, C# scripting, and the practical debugging/testing process required to build and polish multiplayer gameplay mechanics.
 
 ---
+
+YouTube (First version) - https://youtu.be/ZwdT4c5kkY8
+
+---
 ---
 
 # Operation Dream — Процедурный 3D Мультиплеерный FPS Прототип
@@ -125,3 +129,7 @@ Operation Dream — это прототип 3D-шутера от первого 
 
 ## Назначение проекта
 Проект создан как практический прототип на Unity для демонстрации архитектуры игровых систем, C#-скриптинга и полного цикла разработки, отладки и тестирования сетевых игровых механик.
+
+---
+
+YouTube (First version) - https://youtu.be/ZwdT4c5kkY8
