@@ -1,14 +1,13 @@
 using Mirror;
 using UnityEngine;
 
-/// <summary>
-/// Проигрывает звук шага локально (мгновенно, без сети) и рассылает
-/// остальным клиентам через сервер, чтобы они услышали шаг в 3D
-/// в точке, где реально стоит игрок.
-///
-/// Вызывается из PlayerMovement.HandleHeadBob() в момент пересечения
-/// bob-синусоидой нуля (= момент касания ногой земли).
-/// </summary>
+// ============================================================
+// NetworkFootstepAudio
+// Plays local footstep audio instantly and syncs 3D spatial sounds to remote clients.
+// Проигрывает звук шага локально (без задержки) и синхронизирует 3D-звуки для остальных игроков.
+// Triggered by PlayerMovement head-bobbing zero-crossings (foot touching ground).
+// Вызывается из PlayerMovement при пересечении качанием головы нуля (касание земли).
+// ============================================================
 public class NetworkFootstepAudio : NetworkBehaviour
 {
     private enum Surface : byte
@@ -26,30 +25,35 @@ public class NetworkFootstepAudio : NetworkBehaviour
     [SerializeField] private AudioClip[] groundRunClips;
 
     [Header("Surface Detection")]
-    [Tooltip("Коллайдеры земли с тегом Stone определяются как камень, всё остальное - Ground")]
+    [Tooltip("Ground colliders tagged 'Stone' detect as Stone surface; all others default to Ground.")]
     [SerializeField] private LayerMask groundMask = ~0;
     [SerializeField] private float raycastDistance = 1.2f;
     [SerializeField] private float raycastUpOffset = 0.1f;
 
-    [Header("3D Sound (для остальных клиентов)")]
+    [Header("3D Sound (For Remote Clients)")]
     [SerializeField] private float minDistance = 1f;
     [SerializeField] private float maxDistance = 15f;
     [Range(0f, 1f)]
     [SerializeField] private float volume = 0.8f;
 
     [Header("Footstep Timing")]
-    [Tooltip("Минимальный интервал между шагами при ходьбе (сек) - страховка от слишком частого триггера")]
+    [Tooltip("Minimum delay between walking steps (seconds) to prevent trigger spam.")]
+    // Минимальный интервал между шагами при ходьбе (сек) — страховка от спама
     [SerializeField] private float walkStepInterval = 0.42f;
-    [Tooltip("Минимальный интервал между шагами при беге (сек)")]
+    
+    [Tooltip("Minimum delay between running steps (seconds).")]
+    // Минимальный интервал между шагами при беге (сек)
     [SerializeField] private float runStepInterval = 0.28f;
 
     private float _lastStepTime = -999f;
 
-    // чтобы не проигрывать один и тот же клип два раза подряд
+    // Cache indices to avoid repeating the same audio clip twice in a row
+    // Кэш индексов, чтобы избегать повтора одного и того же клипа дважды подряд
     private int _lastStoneIndex = -1;
     private int _lastGroundIndex = -1;
 
-    /// <summary>Вызывать только с локального игрока (PlayerMovement уже гарантирует isLocalPlayer).</summary>
+    // Call only on the local player authority (PlayerMovement guarantees isLocalPlayer check)
+    // Вызывать только на локальном игроке (PlayerMovement гарантирует проверку isLocalPlayer)
     public void TriggerFootstep(bool isRunning)
     {
         if (!isLocalPlayer) return;
@@ -62,10 +66,12 @@ public class NetworkFootstepAudio : NetworkBehaviour
         AudioClip clip = PickClip(surface, isRunning);
         if (clip == null) return;
 
-        // 1) сам слышишь сразу, без задержки на сеть
+        // 1. Play local sound instantly with zero network latency
+        // 1. Слышим свой шаг мгновенно, без задержек сети
         AudioSource.PlayClipAtPoint(clip, transform.position, volume);
 
-        // 2) остальным - через сервер, в 3D, в нашей позиции
+        // 2. Broadcast step sound through server to other clients at our exact position
+        // 2. Рассылаем шаг через сервер остальным игрокам в нашей текущей позиции
         CmdFootstep((byte)surface, isRunning, transform.position);
     }
 
@@ -73,6 +79,8 @@ public class NetworkFootstepAudio : NetworkBehaviour
     {
         Vector3 origin = transform.position + Vector3.up * raycastUpOffset;
 
+        // Raycast downward to inspect surface tag directly beneath the player
+        // Рейкаст вниз для определения тега поверхности под ногами игрока
         if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, raycastDistance, groundMask))
         {
             if (hit.collider.CompareTag("Stone"))
@@ -90,7 +98,8 @@ public class NetworkFootstepAudio : NetworkBehaviour
             _ => isRunning ? groundRunClips : groundWalkClips,
         };
 
-        // фоллбэк: если для бега нет отдельных клипов - используем ходьбу
+        // Fallback: Use walking clips if running array is empty or unassigned
+        // Фоллбэк: если клипы для бега не заданы, используем клипы ходьбы
         if (clips == null || clips.Length == 0)
         {
             clips = surface == Surface.Stone ? stoneWalkClips : groundWalkClips;
@@ -104,6 +113,8 @@ public class NetworkFootstepAudio : NetworkBehaviour
 
         int lastIndex = surface == Surface.Stone ? _lastStoneIndex : _lastGroundIndex;
 
+        // Pick a non-repeating random clip
+        // Выбираем случайный клип без повтора предыдущего
         int index;
         do
         {
@@ -116,18 +127,24 @@ public class NetworkFootstepAudio : NetworkBehaviour
         return clips[index];
     }
 
+    // Command sent from local owner client to server
+    // Команда отправляется с локального клиента-владельца на сервер
     [Command]
     private void CmdFootstep(byte surface, bool isRunning, Vector3 position)
     {
         RpcFootstep(surface, isRunning, position);
     }
 
+    // ClientRpc excluding owner to prevent duplicate audio playback on origin client
+    // ClientRpc с пропуском владельца (includeOwner = false), чтобы исключить дублирование звука
     [ClientRpc(includeOwner = false)]
     private void RpcFootstep(byte surface, bool isRunning, Vector3 position)
     {
         AudioClip clip = PickClip((Surface)surface, isRunning);
         if (clip == null) return;
 
+        // Route spatial audio playback through external pool to eliminate GC allocations
+        // Воспроизводим 3D-звук через пул объектов, исключая лишние аллокации GC
         FootstepAudioPool.PlayAt(position, clip, minDistance, maxDistance, volume);
     }
 }

@@ -6,6 +6,7 @@ using Mirror;
 /// FPS-контроллер движения в стиле CS/Source: скорость не задаётся напрямую,
 /// а разгоняется/тормозится через Acceleration/Friction. Даёт инерцию,
 /// воздушный контроль и задел под bhop/slide/dash в будущем.
+/// CS/Source style FPS movement controller: momentum, inertia, air control, acceleration/friction physics.
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 public class PlayerMovement : NetworkBehaviour
@@ -76,12 +77,12 @@ public class PlayerMovement : NetworkBehaviour
     // ==================== INPUT STATE ====================
     private Vector2 _moveInput;
     private bool _isRunning;
-    private bool _isCrouching;      // хочет ли игрок присесть (зажата кнопка)
-    private bool _isActuallyCrouching; // реально присел (в т.ч. вынужденно из-за потолка)
+    private bool _isCrouching;         // wants to crouch (button held) // хочет ли игрок присесть (зажата кнопка)
+    private bool _isActuallyCrouching; // forced or active crouch state // реально присел (в т.ч. вынужденно из-за потолка)
 
     // ==================== MOVEMENT STATE ====================
-    private Vector3 _horizontalVelocity;  // скорость по XZ
-    private float _verticalVelocity;      // скорость по Y (гравитация/прыжок)
+    private Vector3 _horizontalVelocity;  // horizontal velocity vector (XZ) // скорость по XZ
+    private float _verticalVelocity;      // vertical velocity (Y axis gravity/jump) // скорость по Y (гравитация/прыжок)
     private bool _isGrounded;
 
     // ==================== JUMP TIMERS ====================
@@ -92,7 +93,7 @@ public class PlayerMovement : NetworkBehaviour
     private float _bobTimer;
     private float _defaultCamY;
     private float _currentCamCrouchOffset;
-    private float _prevBobSin; // для детекта момента "шага" - пересечение синусоидой нуля
+    private float _prevBobSin; // zero-crossing detector for footsteps // для детекта момента "шага" - пересечение синусоидой нуля
 
     // ==================== CROUCH CACHE ====================
     private float _originalHeight;
@@ -111,18 +112,27 @@ public class PlayerMovement : NetworkBehaviour
 
         _inputActions = new PlayerInputActions();
 
+        // Bind movement vector input callbacks
+        // Привязываем колбэки для вектора перемещения
         _inputActions.Player.Move.performed += ctx => _moveInput = ctx.ReadValue<Vector2>();
         _inputActions.Player.Move.canceled += ctx => _moveInput = Vector2.zero;
 
+        // Bind look rotation callback to camera look handler
+        // Передаем управление мышью в контроллер камеры
         _inputActions.Player.Look.performed += ctx => mouseLook.Rotate(ctx.ReadValue<Vector2>());
 
+        // Buffer jump input trigger rather than jumping immediately
         // Прыжок не прыгает сразу — только "запоминается" на jumpBufferTime.
         // Реальный прыжок происходит в HandleJump(), когда есть право (земля/coyote).
         _inputActions.Player.Jump.performed += ctx => _jumpBufferCounter = jumpBufferTime;
 
+        // Bind sprint state toggles
+        // Переключение состояния спринта
         _inputActions.Player.Sprint.performed += ctx => _isRunning = true;
         _inputActions.Player.Sprint.canceled += ctx => _isRunning = false;
 
+        // Bind crouch action and synchronize state across network
+        // Обработка приседания с сетевой синхронизацией состояния
         _inputActions.Player.Crouch.performed += ctx =>
         {
             _isCrouching = true;
@@ -142,12 +152,14 @@ public class PlayerMovement : NetworkBehaviour
 
     private void Start()
     {
+        // Disable camera & audio listeners by default to prevent cross-client viewport bugs
         // Камера и звук выключены у всех по умолчанию.
         // OnStartLocalPlayer() включит их только для ТВОЕГО игрока — иначе будешь видеть/слышать мир
         // глазами последнего заспавнившегося клиента, а не своими.
         SetCameraAndAudioEnabled(false);
     }
 
+    // Mirror lifecycle hook triggered exclusively on local player client instance
     // Mirror вызывает это ТОЛЬКО на объекте, которым управляет именно этот клиент
     public override void OnStartLocalPlayer()
     {
@@ -159,6 +171,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         if (!isLocalPlayer)
         {
+            // Position of remote players is interpolated by NetworkTransform, only animate local crouch visuals
             // У remote-игроков позицию двигает NetworkTransform, а не физика.
             // Локально нам нужно только докрутить визуал приседа.
             HandleCrouch();
@@ -183,6 +196,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private void OnEnable()
     {
+        // Re-enable Input Actions map on respawn (symmetrical to OnDisable call)
         // Симметрично OnDisable(): при смерти PlayerDeath делает enabled = false,
         // что выключает Input Actions карту через OnDisable(). Без этого OnEnable()
         // после респавна (enabled = true) карта так и оставалась выключенной навсегда,
@@ -204,6 +218,7 @@ public class PlayerMovement : NetworkBehaviour
 
     private void ReadInput()
     {
+        // Cancel sprint when actively crouching
         // Ввод уже приходит через Input Actions события (_moveInput, _isRunning, _isCrouching).
         // Здесь place для будущей логики (например, отмена спринта при приседе).
         if (_isActuallyCrouching)
@@ -257,6 +272,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         Vector3 wishDir = GetWishDirection();
 
+        // Classic Quake/CS air-strafe wish-speed clamping
         // В воздухе скорость не может расти сколько угодно — классический
         // air-strafe cap: чем меньше airWishSpeedCap, тем "честнее" физика,
         // чем больше — тем легче будет крутить strafe-jump в будущем.
@@ -266,6 +282,7 @@ public class PlayerMovement : NetworkBehaviour
     }
 
     /// <summary>
+    /// Classic Quake/Source-style accelerate implementation.
     /// Классический Quake/Source-style accelerate: разгоняем _horizontalVelocity
     /// в сторону wishDir, но не даём превысить wishSpeed вдоль этого направления.
     /// </summary>
@@ -296,6 +313,7 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
+        // Sharpen deceleration curve at low speeds to prevent infinite micro-sliding
         // stopSpeedThreshold не даёт трению быть "линейным в ноль" бесконечно медленно —
         // на низких скоростях персонаж тормозит чуть резче, как в Source.
         float control = speed < stopSpeedThreshold ? stopSpeedThreshold : speed;
@@ -312,6 +330,7 @@ public class PlayerMovement : NetworkBehaviour
         Vector3 fullVelocity = _horizontalVelocity + Vector3.up * _verticalVelocity;
         CollisionFlags flags = _controller.Move(fullVelocity * Time.deltaTime);
 
+        // Reset upward velocity if colliding with ceilings
         if ((flags & CollisionFlags.Above) != 0 && _verticalVelocity > 0f)
             _verticalVelocity = 0f;
     }
@@ -329,6 +348,7 @@ public class PlayerMovement : NetworkBehaviour
         {
             _verticalVelocity = jumpForce;
 
+            // Clear jump buffer & coyote timers to avoid double triggers
             // Сбрасываем оба таймера, чтобы не спрыгнуть дважды с одного приземления
             _jumpBufferCounter = 0f;
             _coyoteTimeCounter = 0f;
@@ -339,6 +359,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         if (_isGrounded && _verticalVelocity < 0f)
         {
+            // Apply small negative bias to snap CharacterController to ground unevenness
             // Небольшое отрицательное значение держит controller "прижатым" к земле,
             // иначе isGrounded будет дёргаться на неровностях.
             _verticalVelocity = -2f;
@@ -357,6 +378,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         bool wantsCrouch = _isCrouching;
 
+        // Force crouch state if headroom obstacle is detected above
         if (!wantsCrouch && !CanStandUp())
             wantsCrouch = true;
 
@@ -413,7 +435,10 @@ public class PlayerMovement : NetworkBehaviour
             QueryTriggerInteraction.Ignore);
     }
 
-    /// <summary>Вызывается NetworkPlayerState на remote-клиентах при синхронизации crouch-флага.</summary>
+    /// <summary>
+    /// Invoked by NetworkPlayerState on remote clients during crouch flag sync.
+    /// Вызывается NetworkPlayerState на remote-клиентах при синхронизации crouch-флага.
+    /// </summary>
     public void SetNetworkCrouch(bool state)
     {
         _isCrouching = state;
@@ -468,6 +493,7 @@ public class PlayerMovement : NetworkBehaviour
 
         float baseY = _defaultCamY + _currentCamCrouchOffset;
 
+        // Head bob frequency driven by real horizontal velocity rather than raw input
         // Боб теперь завязан на реальную горизонтальную скорость, а не на raw input —
         // с инерцией это выглядит естественнее (не дёргается на старте/торможении).
         float speedRatio = _horizontalVelocity.magnitude / Mathf.Max(walkSpeed, 0.001f);
@@ -483,6 +509,7 @@ public class PlayerMovement : NetworkBehaviour
 
             cameraTransform.localPosition = new Vector3(0, baseY + yOffset, 0);
 
+            // Footstep event trigger on upward sine zero-crossing
             // Момент шага = восходящее пересечение синусоидой нуля (1 раз за цикл bob).
             bool crossedZero = _prevBobSin <= 0f && bobSin > 0f;
 

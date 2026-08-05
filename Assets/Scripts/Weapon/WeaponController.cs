@@ -2,6 +2,13 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Mirror;
 
+// ============================================================
+// WeaponController
+// Core client-side weapon shooting, spread, damage, and ammo management script.
+// Основной скрипт управления стрельбой, разбросом, уроном и боезапасом на клиенте.
+// Handles local raycasting, tracers, audio cues, and Mirror network hit events.
+// Обрабатывает локальные рейкасты, трейсеры, звуки и сетевые события попаданий Mirror.
+// ============================================================
 public class WeaponController : MonoBehaviour
 {
     [SerializeField] private NetworkIdentity networkIdentity;
@@ -19,9 +26,12 @@ public class WeaponController : MonoBehaviour
     [Tooltip("3D AudioSource на модели оружия (spatialBlend=1). Один на выстрел+перезарядку, PlayOneShot не блокирует друг друга.")]
     [SerializeField] private AudioSource weaponAudioSource;
 
+    // Public getter to access active ScriptableObject config
+    // Публичный геттер для доступа к текущим настройкам ScriptableObject
     public WeaponData WeaponSettings => weaponSettings;
 
-    // --- Публичные геттеры для UI (счётчик патронов и т.д.) ---
+    // --- Public Getters for UI (Ammo counter, reload state, etc.) ---
+    // --- Публичные геттеры для UI (счётчик патронов, статус перезарядки) ---
     public int CurrentAmmo => currentAmmo;
     public int CurrentReserveAmmo => currentReserveAmmo;
     public int MagazineSize => weaponSettings != null ? weaponSettings.magazineSize : 0;
@@ -35,33 +45,34 @@ public class WeaponController : MonoBehaviour
     private int _lastShootSoundIndex = -1;
     private Coroutine _reloadCoroutine;
 
-    // Событие, которое будет использовать NetworkWeapon
+    // Event raised for NetworkWeapon to handle server-side hit validation and damage
+    // Событие, передаваемое в NetworkWeapon для валидации попаданий и нанесения урона на сервере
     public event System.Action<RaycastHit, float> OnPlayerHit;
 
-    // Новое событие: то же самое, но + направление, в котором реально летела пуля
-    // (с учётом разброса). Нужно, чтобы при смерти тело падало в сторону выстрела.
-    // Подпишись на него там, где сейчас вызывается health.TakeDamage(damage) —
-    // и передай damage-direction вторым аргументом в новый оверлоад TakeDamage(damage, direction).
+    // Extended event carrying shot direction vector for ragdoll death impulse calculations
+    // Расширенное событие с вектором направления пули для импульса смерти регдолла
     public event System.Action<RaycastHit, float, Vector3> OnPlayerHitDirectional;
     
-    // Событие для дублёра визуальных эффектов (NetworkWeaponEffects)
+    // Event triggered to notify network FX synchronizer (NetworkWeaponEffects)
+    // Событие выстрела для дублирования визуальных эффектов другим игрокам
     public event System.Action OnWeaponFired;
 
-    // Событие для дублёра: начало перезарядки (звук/анимация у остальных клиентов)
+    // Event triggered when reload sequence initiates for remote audio/animation sync
+    // Событие начала перезарядки для синхронизации анимации и звука у других клиентов
     public event System.Action OnWeaponReloadStarted;
 
     private void Awake()
     {
-        // Страховка: если ссылку забыли перетянуть в инспекторе на префабе
-        // (что и произошло - у всех 5 WeaponController networkIdentity был пуст),
-        // достаём её из родителя автоматически, чтобы проверка isLocalPlayer
-        // в Update() не отключалась молча.
+        // Auto-assign NetworkIdentity from parent if missing in inspector field
+        // Страховка: автопоиск NetworkIdentity в родителе, если ссылка не задана в инспекторе
         if (networkIdentity == null)
             networkIdentity = GetComponentInParent<NetworkIdentity>();
     }
 
     private void Start()
     {
+        // Initialize magazine and reserve ammo capacities from settings asset
+        // Инициализация патронов в магазине и запасе из файла настроек
         if (weaponSettings != null)
         {
             currentAmmo = weaponSettings.magazineSize;
@@ -71,6 +82,8 @@ public class WeaponController : MonoBehaviour
 
     private void OnDisable()
     {
+        // Cancel active reload routine if weapon script component is disabled
+        // Отмена корутины перезарядки при отключении скрипта или смене оружия
         if (isReloading)
         {
             StopAllCoroutines();
@@ -81,35 +94,41 @@ public class WeaponController : MonoBehaviour
 
     private void Update()
     {
-        // Fail-closed: если по какой-то причине networkIdentity так и не
-        // нашёлся - НЕ обрабатываем ввод, вместо того чтобы молча
-        // разрешить стрельбу всем подряд (как было раньше при пустой ссылке).
+        // Fail-closed safety check: verify local player authority
+        // Проверка локального игрока: запрещаем ввод, если нет прав владения объектом
         if (networkIdentity == null || !networkIdentity.isLocalPlayer)
             return;
 
-        // Пауза: не обрабатываем ввод оружия, пока открыто меню паузы
+        // Block input processing if Pause Menu interface is active
+        // Блокировка ввода при открытом меню паузы
         if (PauseMenuController.Instance != null && PauseMenuController.Instance.IsPaused)
             return;
 
         if (weaponSettings == null)
             return;
 
+        // Check if Right Mouse Button is currently held down
+        // Проверка считывания удержания правой кнопки мыши (ADS)
         isADS = Mouse.current.rightButton.isPressed;
 
+        // Evaluate primary trigger condition based on weapon firemode (automatic vs semi-auto)
+        // Проверка нажатия стрельбы с учетом режима (автоматический или одиночный)
         bool shouldShoot = weaponSettings.isAutomatic
             ? Mouse.current.leftButton.isPressed
             : Mouse.current.leftButton.wasPressedThisFrame;
 
         if (shouldShoot)
         {
-            // Дробовик: выстрел прерывает дозарядку гильз (не долистываем до полного магазина).
-            // currentAmmo > 0 - должна быть хотя бы 1 гильза в стволе, иначе стрелять нечем.
+            // Shotgun interrupt logic: shooting cancels individual shell reloads
+            // Прерывание поэтапной дозарядки дробовика при нажатии на выстрел
             if (isReloading && weaponSettings.perShellReload && currentAmmo > 0)
                 InterruptReload();
 
             Shoot();
         }
 
+        // Handle reload keypress (R) when conditions are met
+        // Обработка перезарядки по кнопке R
         if (Keyboard.current.rKey.wasPressedThisFrame &&
             !isReloading &&
             currentAmmo < weaponSettings.magazineSize &&
@@ -124,6 +143,8 @@ public class WeaponController : MonoBehaviour
         if (isReloading)
             return;
 
+        // Rate of fire cadence check
+        // Проверка задержки между выстрелами
         if (Time.time < lastShotTime + weaponSettings.fireRate)
             return;
 
@@ -133,6 +154,8 @@ public class WeaponController : MonoBehaviour
         lastShotTime = Time.time;
         currentAmmo--;
 
+        // Apply visual procedural recoil to camera/weapon model
+        // Расчет и применение процедуры отдачи с учетом мультипликатора ADS
         if (recoilHandler != null)
         {
             float recoilMultiplier = isADS
@@ -145,13 +168,17 @@ public class WeaponController : MonoBehaviour
             );
         }
 
-        // --- ЛОКАЛЬНЫЕ ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ---
+        // --- Local Visual Effects ---
+        // --- Локальные визуальные эффекты ---
         PlayVisualEffectsOnly();
         PlayShootAudio();
 
-        // --- СИГНАЛ В СЕТЬ ДЛЯ ДРУГИХ ИГРОКОВ ---
+        // --- Network Event Signal ---
+        // --- Отправка сетевого сигнала выстрела ---
         OnWeaponFired?.Invoke();
 
+        // Calculate spread and fire individual pellets or single round
+        // Расчет урона и разброса на каждую дробинку/пулю
         int pellets = Mathf.Max(1, weaponSettings.pelletCount);
         float damagePerPellet = weaponSettings.damage / pellets;
 
@@ -159,7 +186,8 @@ public class WeaponController : MonoBehaviour
             FirePellet(damagePerPellet);
     }
 
-    // Метод, который проигрывает только вспышку и гильзу
+    // Instantiates muzzle flash and shell eject particle prefabs
+    // Спавн вспышки выстрела и гильзы с приданием физического импульса
     public void PlayVisualEffectsOnly()
     {
         if (weaponSettings == null) return;
@@ -184,9 +212,8 @@ public class WeaponController : MonoBehaviour
         }
     }
 
-    // AudioSource стоит прямо на оружии (в сцене - у каждого игрока свой инстанс),
-    // поэтому 3D-позиция сама следует за игроком без ручной синхронизации позиции,
-    // в отличие от шагов, где источник статичен на момент выстрела.
+    // Plays random non-repeating gunshot sound effect using OneShot
+    // Воспроизведение случайного звука выстрела без повторения предыдущего
     public void PlayShootAudio()
     {
         if (weaponAudioSource == null || weaponSettings == null) return;
@@ -198,7 +225,8 @@ public class WeaponController : MonoBehaviour
         weaponAudioSource.PlayOneShot(clip, weaponSettings.shootVolume);
     }
 
-    // Вызывается из Reload() локально, и из NetworkWeaponEffects на остальных клиентах
+    // Plays reload audio clip
+    // Воспроизведение звука перезарядки
     public void PlayReloadAudio()
     {
         if (weaponAudioSource == null || weaponSettings == null) return;
@@ -225,17 +253,20 @@ public class WeaponController : MonoBehaviour
     }
 
     // =========================================================================
-    // НОВЫЕ МЕТОДЫ: Имитация выстрела для других игроков (БЕЗ УРОНА)
+    // REMOTE SIMULATION METHODS (Visuals only, zero damage calculation)
+    // РЕЖИМ СИМУЛЯЦИИ ВЫСТРЕЛА ДЛЯ ДРУГИХ КЛИЕНТОВ (Только визуальные эффекты, без урона)
     // =========================================================================
     public void PlayRemoteVisuals()
     {
         if (weaponSettings == null) return;
 
+        // 1. Muzzle flash and shell physics
         // 1. Вспышка и гильза
         PlayVisualEffectsOnly();
         PlayShootAudio();
 
-        // 2. Трассеры и эффекты попадания для каждого патрона/дробинки
+        // 2. Tracers and surface impact particles per pellet
+        // 2. Трейсеры и эффекты попадания для каждого патрона/дробинки
         int pellets = Mathf.Max(1, weaponSettings.pelletCount);
         for (int i = 0; i < pellets; i++)
         {
@@ -245,7 +276,8 @@ public class WeaponController : MonoBehaviour
 
     private void FireRemotePellet()
     {
-        // У других клиентов нет информации, в прицеле мы или нет, поэтому используем базовый разброс
+        // Remote clients use default spread calculation without ADS state
+        // Базовый разброс для сторонних клиентов
         float spread = weaponSettings.pelletCount > 1
             ? weaponSettings.spreadAngle
             : weaponSettings.bloomAngle;
@@ -256,12 +288,14 @@ public class WeaponController : MonoBehaviour
             Random.Range(-spread, spread),
             0f) * direction;
 
-        // Визуальный Raycast
+        // Visual Raycast
+        // Визуальный Рейкаст
         if (Physics.Raycast(playerCamera.transform.position, direction, out RaycastHit hit, weaponSettings.range))
         {
             IDamageable target = hit.collider.GetComponentInParent<IDamageable>();
             
-            // Выбираем эффект (кровь или искры)
+            // Select impact particle prefab (blood or surface metal/stone impact)
+            // Выбор эффекта попадания (кровь или стены)
             GameObject effect = target != null
                 ? weaponSettings.hitEffectEnemy
                 : weaponSettings.hitEffectWall;
@@ -271,7 +305,8 @@ public class WeaponController : MonoBehaviour
                 Destroy(Instantiate(effect, hit.point, Quaternion.LookRotation(hit.normal)), 1f);
             }
 
-            // Спавним трейсер
+            // Spawn visual bullet tracer line
+            // Спавн трейсера пули
             if (weaponSettings.tracerPrefab != null && muzzlePoint != null)
             {
                 TrailRenderer tracer = Instantiate(weaponSettings.tracerPrefab, muzzlePoint.position, Quaternion.identity);
@@ -282,6 +317,8 @@ public class WeaponController : MonoBehaviour
     }
     // =========================================================================
 
+    // Performs actual raycast logic, hit detection, damage falloff calculation and triggers events
+    // Выполнение фактического рейкаста, расчет разброса, дистанции урона и вызов событий
     private void FirePellet(float damagePerPellet)
     {
         float spread = weaponSettings.pelletCount > 1
@@ -344,6 +381,8 @@ public class WeaponController : MonoBehaviour
         }
     }
 
+    // Calculates damage attenuation based on distance falloff curve values
+    // Расчет спада урона в зависимости от расстояния до цели
     private float CalculateDamage(float distance, float baseDamage)
     {
         float t = Mathf.Clamp01(
@@ -353,13 +392,16 @@ public class WeaponController : MonoBehaviour
         return baseDamage * Mathf.Lerp(1f, weaponSettings.minDamageMultiplier, t);
     }
 
+    // Handles full reload routine or individual shell insertion loop
+    // Корутина перезарядки (обойма целиком или поочередная вставка патронов)
     private System.Collections.IEnumerator Reload()
     {
         isReloading = true;
 
         if (weaponSettings.perShellReload)
         {
-            // По одной гильзе: звук на каждую, можно прервать выстрелом (InterruptReload).
+            // Per-shell loop: plays audio per round, can be interrupted by shooting input
+            // Поочередная перезарядка: проигрывает звук на каждую гильзу, прерывается выстрелом
             while (currentAmmo < weaponSettings.magazineSize && currentReserveAmmo > 0)
             {
                 yield return new WaitForSeconds(weaponSettings.shellReloadTime);
@@ -388,7 +430,10 @@ public class WeaponController : MonoBehaviour
         _reloadCoroutine = null;
     }
 
-    /// <summary>Прерывает дозарядку гильз досрочно (напр. выстрел на 5 из 8) - оставляет уже заряженные патроны.</summary>
+    /// <summary>
+    /// Interrupts individual shell insertion early while retaining loaded ammo.
+    /// Прерывает дозарядку гильз досрочно (например, выстрел на 5 из 8) - оставляет уже заряженные патроны.
+    /// </summary>
     private void InterruptReload()
     {
         if (_reloadCoroutine != null)
@@ -400,6 +445,8 @@ public class WeaponController : MonoBehaviour
         isReloading = false;
     }
 
+    // Assigns new ScriptableObject data and resets ammo state
+    // Смена активного оружия и сброс текущего состояния
     public void SetWeapon(WeaponData newWeapon)
     {
         weaponSettings = newWeapon;
@@ -411,12 +458,16 @@ public class WeaponController : MonoBehaviour
         if (recoilHandler != null) recoilHandler.ResetRecoil();
     }
 
+    // Refills reserve ammo count up to maximum capacity limit
+    // Пополнение запасных патронов с ограничением по максимальному количеству
     public void AddReserveAmmo(int amount)
     {
         if (weaponSettings == null) return;
         currentReserveAmmo = Mathf.Clamp(currentReserveAmmo + amount, 0, weaponSettings.maxReserveAmmo);
     }
 
+    // Animates bullet tracer particle moving from muzzle point to impact point
+    // Анимация полета трейсера от дула к точке попадания
     private System.Collections.IEnumerator SpawnTracer(TrailRenderer tracer, Vector3 hitPoint)
     {
         float time = 0;
@@ -433,16 +484,16 @@ public class WeaponController : MonoBehaviour
         Destroy(tracer.gameObject, tracer.time);
     }
 
-    /// <summary>
-    /// Принудительно сбрасывает статус перезарядки и полностью восстанавливает патроны (вызывается при респавне).
-    /// </summary>
     private void OnEnable()
     {
+        // Ensure reload status is cleared whenever game object gets enabled
         // При любом включении объекта принудительно снимаем флаг перезарядки
         isReloading = false;
         _reloadCoroutine = null;
     }
 
+    // Force-resets reload routines and restores full magazine/reserve capacity on respawn
+    // Принудительный сброс состояний и восполнение патронов (при респавне)
     public void ResetWeapon()
     {
         StopAllCoroutines();

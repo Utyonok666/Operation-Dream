@@ -4,6 +4,13 @@ using Mirror;
 using TMPro;
 using UnityEngine;
 
+// ============================================================
+// MainMenuController
+// Main menu logic: Host / Join / Settings / Quit.
+// Логика главного меню: Host / Join / Settings / Quit.
+// Plain MonoBehaviour (not networked) — runs BEFORE any connection exists.
+// Обычный MonoBehaviour (не сетевой) — работает ДО подключения к сети.
+// ============================================================
 public class MainMenuController : MonoBehaviour
 {
     public static MainMenuController Instance { get; private set; }
@@ -11,12 +18,13 @@ public class MainMenuController : MonoBehaviour
     [Header("References")]
     [SerializeField] private GameObject menuRoot;
     [SerializeField] private GameObject settingsPanel;
-    [SerializeField] private TMP_InputField joinIpInputField; // Инпут ТОЛЬКО для подключения
+    [SerializeField] private TMP_InputField joinIpInputField; // Only used for Join // Только для подключения
 
     [Header("Settings")]
     [SerializeField] private string defaultAddress = "localhost";
 
-    // Глобальный код, который заберет HUD игрока
+    // Static so it survives scene load; read later by RoomCodeDisplay
+    // Статик, чтобы пережить смену сцены; читается потом в RoomCodeDisplay
     public static string CurrentRoomCode { get; private set; } = "";
 
     private void Awake()
@@ -24,7 +32,7 @@ public class MainMenuController : MonoBehaviour
         Instance = this;
 
         if (joinIpInputField != null && string.IsNullOrEmpty(joinIpInputField.text))
-            joinIpInputField.text = defaultAddress;
+            joinIpInputField.text = defaultAddress; // Prefill only if empty // Заполняем, только если пусто
 
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
@@ -41,7 +49,7 @@ public class MainMenuController : MonoBehaviour
         if (menuRoot != null) menuRoot.SetActive(true);
         if (settingsPanel != null) settingsPanel.SetActive(false);
 
-        Cursor.lockState = CursorLockMode.None;
+        Cursor.lockState = CursorLockMode.None; // Free cursor for menu clicks // Свободный курсор для кликов
         Cursor.visible = true;
     }
 
@@ -51,23 +59,21 @@ public class MainMenuController : MonoBehaviour
         if (settingsPanel != null) settingsPanel.SetActive(false);
     }
 
-    // КНОПКА "HOST" (Создание) -> Генерирует случайный код комнаты
+    // HOST button -> generates room code, starts hosting // Кнопка HOST -> генерит код, стартует хост
     public void OnHostClicked()
     {
         if (NetworkManager.singleton == null)
             return;
 
-        // Генерируем случайный код комнаты (напр. ROOM-7B2X)
-        CurrentRoomCode = GenerateRandomRoomCode();
+        CurrentRoomCode = GenerateRandomRoomCode(); // Cosmetic code, not a real address // Просто "красивый" код, не адрес
 
-        // Для работы локальной сети Mirror подтягивает IP
-        NetworkManager.singleton.networkAddress = GetLocalIPAddress();
+        NetworkManager.singleton.networkAddress = GetLocalIPAddress(); // Real LAN IP for connections // Реальный LAN IP для подключений
 
         HideMenu();
-        NetworkManager.singleton.StartHost();
+        NetworkManager.singleton.StartHost(); // Server + local client in one process // Сервер + клиент в одном процессе
     }
 
-    // КНОПКА "JOIN" (Подключение) -> Берет код/IP из поля ввода
+    // JOIN button -> connects using typed address // Кнопка JOIN -> подключается по введённому адресу
     public void OnJoinClicked()
     {
         if (NetworkManager.singleton == null)
@@ -87,7 +93,7 @@ public class MainMenuController : MonoBehaviour
     public void OnSettingsClicked()
     {
         if (settingsPanel != null)
-            settingsPanel.SetActive(!settingsPanel.activeSelf);
+            settingsPanel.SetActive(!settingsPanel.activeSelf); // Simple toggle // Простой переключатель
     }
 
     public void OnCloseSettingsClicked()
@@ -98,14 +104,15 @@ public class MainMenuController : MonoBehaviour
 
     public void OnQuitClicked()
     {
-        Application.Quit();
+        Application.Quit(); // Works only in builds, not in Editor // Работает только в билде, не в редакторе
 
 #if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
+        UnityEditor.EditorApplication.isPlaying = false; // Editor-only workaround // Обходной путь для редактора
 #endif
     }
 
-    // Генератор случайных рандомных кодов комнаты (без путающихся букв O/0, I/1)
+    // Random room code, avoids confusing chars like O/0, I/1
+    // Случайный код комнаты без похожих символов O/0, I/1
     private string GenerateRandomRoomCode()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -117,6 +124,7 @@ public class MainMenuController : MonoBehaviour
         return $"ROOM-{new string(code)}";
     }
 
+    // Finds local IPv4 address for LAN play // Ищет локальный IPv4 адрес для игры по LAN
     private string GetLocalIPAddress()
     {
         try
@@ -124,7 +132,7 @@ public class MainMenuController : MonoBehaviour
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
             {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                if (ip.AddressFamily == AddressFamily.InterNetwork) // IPv4 only // Только IPv4
                 {
                     return ip.ToString();
                 }
@@ -132,6 +140,6 @@ public class MainMenuController : MonoBehaviour
         }
         catch { }
 
-        return "127.0.0.1";
+        return "127.0.0.1"; // Fallback if network lookup fails // Заглушка если не нашли адрес
     }
 }

@@ -2,6 +2,13 @@ using System;
 using UnityEngine;
 using Mirror;
 
+// ============================================================
+// Health
+// Server-authoritative HP: damage, regen, death, respawn.
+// Серверно-авторитетное HP: урон, реген, смерть, респавн.
+// Implements IDamageable so weapons don't need to know the concrete target type.
+// Реализует IDamageable, чтобы оружие не знало конкретный тип цели.
+// ============================================================
 public class Health : MonoBehaviour, IDamageable
 {
     [Header("Health")]
@@ -9,10 +16,10 @@ public class Health : MonoBehaviour, IDamageable
 
     [Header("Regeneration")]
     [SerializeField] private bool useRegeneration = true;
-    [SerializeField] private float regenerationDelay = 8f;
-    [SerializeField] private float regenerationSpeed = 24f;
+    [SerializeField] private float regenerationDelay = 8f; // Wait time after last hit before regen starts // Пауза после удара перед началом регена
+    [SerializeField] private float regenerationSpeed = 24f; // HP per second // ХП в секунду
 
-    private float currentHealth;
+    private float currentHealth; // Float internally for smooth regen math // Float внутри для плавного счёта регена
     private float lastDamageTime;
     private bool isDead;
 
@@ -20,10 +27,12 @@ public class Health : MonoBehaviour, IDamageable
     public int MaxHealth => maxHealth;
     public bool IsDead => isDead;
 
-    // Направление последнего попадания (мировой вектор полёта пули).
-    // Нужно для того, чтобы тело при смерти падало именно туда, куда летела пуля.
+    // World-space direction of the last hit, used so the corpse falls the way the bullet was flying
+    // Направление последнего попадания, нужно чтобы труп падал именно туда, куда летела пуля
     public Vector3 LastHitDirection { get; private set; }
 
+    // C# events, not SyncVars — used locally (e.g. by PlayerHUD) to react to changes
+    // Обычные C# события, не SyncVar — используются локально (напр. PlayerHUD), чтобы реагировать на изменения
     public event Action<int> OnHealthChanged;
     public event Action OnDeath;
 
@@ -35,6 +44,8 @@ public class Health : MonoBehaviour, IDamageable
 
     private void Update()
     {
+        // All HP logic is server-only — clients never decide their own HP
+        // Вся логика HP только на сервере — клиенты никогда не решают своё HP сами
         if (!NetworkServer.active)
             return;
 
@@ -48,7 +59,7 @@ public class Health : MonoBehaviour, IDamageable
             return;
 
         if (Time.time < lastDamageTime + regenerationDelay)
-            return;
+            return; // Still within the "no regen" window after last hit // Ещё в окне "без регена" после удара
 
         currentHealth += regenerationSpeed * Time.deltaTime;
         currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
@@ -56,6 +67,8 @@ public class Health : MonoBehaviour, IDamageable
         OnHealthChanged?.Invoke(CurrentHealth);
     }
 
+    // Directly sets HP (e.g. from an external system), handles death/revive edge cases
+    // Напрямую выставляет HP (напр. из внешней системы), обрабатывает грани смерти/оживления
     public void SetHealth(int value)
     {
         int clampedValue = Mathf.Clamp(value, 0, maxHealth);
@@ -70,20 +83,20 @@ public class Health : MonoBehaviour, IDamageable
         }
 
         if (isDead && clampedValue > 0)
-            isDead = false;
+            isDead = false; // Value pushed back above 0 revives without a full Respawn() call // Значение выше 0 оживляет без полного Respawn()
 
         currentHealth = clampedValue;
         OnHealthChanged?.Invoke(CurrentHealth);
     }
 
+    // IDamageable implementation, no hit direction // Реализация IDamageable, без направления попадания
     public void TakeDamage(float damage)
     {
         TakeDamage(damage, Vector3.zero);
     }
 
-    // Новый оверлоад: то же самое, но плюс направление выстрела.
-    // Старый код, вызывающий TakeDamage(damage), продолжает работать как раньше -
-    // просто без направления (тело при смерти упадёт назад по умолчанию).
+    // Overload with hit direction — old callers using TakeDamage(damage) still work fine
+    // Оверлоад с направлением попадания — старый вызов TakeDamage(damage) продолжает работать
     public void TakeDamage(float damage, Vector3 hitDirection)
     {
         if (!NetworkServer.active)
@@ -129,7 +142,7 @@ public class Health : MonoBehaviour, IDamageable
         currentHealth = 0f;
 
         OnHealthChanged?.Invoke(CurrentHealth);
-        OnDeath?.Invoke();
+        OnDeath?.Invoke(); // PlayerDeath.cs subscribes to this to trigger the death sequence // PlayerDeath.cs подписан на это, чтобы запустить сценарий смерти
     }
 
     public void Respawn()
@@ -139,7 +152,7 @@ public class Health : MonoBehaviour, IDamageable
 
         isDead = false;
         currentHealth = maxHealth;
-        lastDamageTime = Time.time;
+        lastDamageTime = Time.time; // Reset regen delay so regen doesn't instantly kick in // Сброс таймера регена, чтобы он не сработал сразу
 
         OnHealthChanged?.Invoke(CurrentHealth);
     }
