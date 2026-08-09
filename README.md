@@ -63,7 +63,7 @@ It demonstrates overall game systems architecture, C# scripting, and the practic
 
 ---
 
-YouTube (First version) - https://youtu.be/ZwdT4c5kkY8
+YouTube (First version) - https://youtube.com/playlist?list=PLdo3vw5eR14U&si=UrCT2F5pG_C3InYc
 
 ---
 ---
@@ -132,4 +132,4 @@ Operation Dream — это прототип 3D-шутера от первого 
 
 ---
 
-YouTube (First version) - https://youtu.be/ZwdT4c5kkY8
+YouTube (First version) - https://youtube.com/playlist?list=PLdo3vw5eR14U&si=UrCT2F5pG_C3InYc
