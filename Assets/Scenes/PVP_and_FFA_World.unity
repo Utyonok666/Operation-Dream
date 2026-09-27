@@ -18,8 +18,8 @@ RenderSettings:
   m_FogColor: {r: 0.73333335, g: 0.9607844, b: 0.9960785, a: 1}
   m_FogMode: 1
   m_FogDensity: 0.002
-  m_LinearFogStart: 40
-  m_LinearFogEnd: 200
+  m_LinearFogStart: 100
+  m_LinearFogEnd: 500
   m_AmbientSkyColor: {r: 0.006229969, g: 0.0065687415, b: 0.03773582, a: 1}
   m_AmbientEquatorColor: {r: 0.6504094, g: 0.6792453, b: 0.65218, a: 1}
   m_AmbientGroundColor: {r: 0.122641504, g: 0.056940697, b: 0.030660376, a: 1}
@@ -15943,8 +15943,8 @@ Terrain:
   m_Enabled: 1
   serializedVersion: 6
   m_TerrainData: {fileID: 15600000, guid: ee33fd9b0a514294b9a5d0d9677e30d7, type: 2}
-  m_TreeDistance: 180
-  m_TreeBillboardDistance: 125
+  m_TreeDistance: 500
+  m_TreeBillboardDistance: 150
   m_TreeCrossFadeLength: 5
   m_TreeMaximumFullLODCount: 50
   m_DetailObjectDistance: 80
@@ -16530,8 +16530,8 @@ Terrain:
   m_Enabled: 1
   serializedVersion: 6
   m_TerrainData: {fileID: 15600000, guid: 662a2ef4d6c168d45b3a0e189ea44199, type: 2}
-  m_TreeDistance: 180
-  m_TreeBillboardDistance: 125
+  m_TreeDistance: 500
+  m_TreeBillboardDistance: 150
   m_TreeCrossFadeLength: 5
   m_TreeMaximumFullLODCount: 50
   m_DetailObjectDistance: 80
@@ -18716,8 +18716,8 @@ Terrain:
   m_Enabled: 1
   serializedVersion: 6
   m_TerrainData: {fileID: 15600000, guid: 0c22077d8c7f8184f8d5cb3cd8a94606, type: 2}
-  m_TreeDistance: 180
-  m_TreeBillboardDistance: 125
+  m_TreeDistance: 500
+  m_TreeBillboardDistance: 150
   m_TreeCrossFadeLength: 5
   m_TreeMaximumFullLODCount: 50
   m_DetailObjectDistance: 80
@@ -20295,8 +20295,8 @@ Terrain:
   m_Enabled: 1
   serializedVersion: 6
   m_TerrainData: {fileID: 15600000, guid: 8cfedc2fcad568f479d6604e8052526c, type: 2}
-  m_TreeDistance: 180
-  m_TreeBillboardDistance: 125
+  m_TreeDistance: 500
+  m_TreeBillboardDistance: 150
   m_TreeCrossFadeLength: 5
   m_TreeMaximumFullLODCount: 50
   m_DetailObjectDistance: 80
